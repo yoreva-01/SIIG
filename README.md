@@ -392,7 +392,7 @@ Fetched rules are stored in `~/.siig/cache/` and reused for 7 days before re-fet
 
 - **Hybrid offline-first** — 110 stacks work with zero network. Network is only used as a fallback for stacks not in the embedded DB, and only for reading public JSON files from GitHub.
 - **No telemetry** — no data collection of any kind.
-- **Read-only scan** — SIIG only reads file and directory *names*, never file contents. Your source code, secrets, and `.env` values are never read.
+- **Read-only scan** — SIIG reads file and directory *names*. The only content it opens is root `package.json` (to see if `main`/`exports` mean a library) and existing ignore / `.vscode/settings.json` files it may update. Source, secrets, and `.env` values are never read.
 - **Write-safe** — only appends to ignore files. Never modifies source code, never deletes anything.
 - **Idempotent** — every entry is checked against existing content before writing. Running twice is identical to running once.
 - **Checksum verified install** — install scripts verify SHA256 of the downloaded binary before placing it on your system.
@@ -418,8 +418,12 @@ Fetched rules are stored in `~/.siig/cache/` and reused for 7 days before re-fet
 ```bash
 git clone https://github.com/yv3000/SIIG.git
 cd SIIG
+go test ./...
+go vet ./...
 go build -o siig .
 ```
+
+Tests live next to each package (`matcher/matcher_test.go`, `writer/writer_test.go`, `scanner/scanner_test.go`, `cache/cache_test.go`). CI runs `go test ./...`, `go vet ./...`, and golangci-lint on every push and pull request.
 
 Cross-compile for any platform:
 
@@ -445,7 +449,7 @@ Yes. SIIG never touches source code — only ignore files. Run `siig --dry-run` 
 SIIG automatically tries to fetch it from [siig-rules](https://github.com/yv3000/siig-rules) on demand. If found, it's cached locally for 7 days and applied — no action needed from you. If it doesn't exist there either, it's silently skipped. You can also [contribute rules](https://github.com/yv3000/siig-rules/blob/main/CONTRIBUTING.md) for it.
 
 **Does SIIG read my `.env` files or source code?**
-No. SIIG only reads file and directory *names* during scanning — never file contents.
+No. Scanning uses file and directory names. It may read root `package.json` for library detection and the ignore / VS Code settings files it writes. `.env` and source are never read.
 
 **How do I use SIIG without internet?**
 Run `siig --offline`. This skips all network requests and uses only the 110 embedded stacks plus anything already in the local cache.

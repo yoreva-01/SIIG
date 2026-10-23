@@ -1,67 +1,63 @@
-# Score roadmap (45 → 85+)
+# Score roadmap (63 → 85+)
 
-DataFactor quality is high enough to keep; **buyer fit fails on tests at HEAD and task capacity ≈ 0**. Quality × zero mineable tasks stays near 45. This file is the work list, not a product spec.
+DataFactor scan of 2026-10-23: **63 / C**, `SOURCE LOC 1,871`, `VOLUME 14.2`,
+`MINING RANK 0`, `TASK CAPACITY ~0`. Buyer fit passed on *builds & tests at
+HEAD*, *genuine history*, *self-contained*, *not a demo* — and failed only on
+**task capacity**: "almost no mineable commits. Value scales with task capacity,
+and quality times zero tasks is zero."
 
-Skipped on purpose (CLI, user rule): Docker, Kubernetes, `.env.example`, Dependabot, structured log library.
+So the score is not held down by code quality any more. It is held down by how
+much of the history arrives as a self-contained change with the test that proves
+it. That is what this file tracks.
 
-## Concept
+Skipped on purpose (CLI, user rule): Docker, Kubernetes, container tooling,
+structured logging stack, `.env.example`.
 
-| Lever | Why it moves score | What we do |
-|---|---|---|
-| Tests at HEAD | Buyers clone and `go test ./...` | Real assertion tests on matcher, writer, scanner, cache, rules, fetcher validation |
-| CI runs tests | `ci_runs_tests` was false | `.github/workflows/ci.yml` on push/PR; release job tests before compile |
-| Lint | `has_lint_config=false` | `.golangci.yml` + lint job |
-| Docs | no CHANGELOG / CONTRIBUTING | add both; README documents test command |
-| Architecture / hygiene | os.Exit + no validation | cobra `RunE`, target parse errors, stack ID / cache path guards, fix dead `HasNpmLib` |
-| Task capacity | history must contain small feature+test commits | **commit each item below separately** — a single mega-commit does not mine |
+## Levers, as the report ranks them
 
-Recency was ~83 days. New commits also refresh that signal.
+| # | Lever | Report impact | Status |
+|---|---|---|---|
+| 01 | Ship features with their tests, in small focused commits | payout + high | **in progress** — every item below is its own commit |
+| 02 | Enforced coverage threshold in CI | medium | done — 80% gate, HEAD measured at 86.5% |
+| 03 | Stop silently discarding filesystem walk errors | medium | done — `ScanResult.ScanErrors`, reported by the CLI |
+| 04 | Dependency update automation + audit | low | done — Dependabot (gomod + actions) and `govulncheck` job |
+| 05 | Commit cadence + conventional commit discipline | medium | **in progress** — `type(scope): subject` documented in CONTRIBUTING, applied throughout |
+| 06 | Input validation at the network fetch boundary | low | done — size cap, strict JSON, `rules.Validate` on fetch and cache read |
 
-## Status
+Category scores that moved as a side effect: Test Coverage 55 → gate + 86.5%,
+Security Hygiene 68 → boundary validation, CI/CD Maturity 62 → gates, release
+smoke test, PR-based rule sync, Dependency Health 65 → refreshed deps + bot.
 
-### Done in working tree (commit separately)
+## Landed in this batch
 
-1. **Scanner `HasNpmLib`** — `package.json` with `main` or `exports` now sets the flag so `.npmignore` can apply. Tests in `scanner/scanner_test.go`.
-2. **Matcher** — table tests for `Match` targets, `dedupe`, `ParseTargets`. `matcher/matcher_test.go`.
-3. **Writer** — ignore append, dry-run, vscode merge, invalid JSON skip via temp dirs. `writer/writer_test.go`.
-4. **Cache** — Get/Set/IsCached/stale with mocked home. `cache/cache_test.go`.
-5. **Rules + fetcher** — LoadAll/GetGlobal; reject unsafe stack IDs. No network in tests.
-6. **CLI errors** — `RunE` returns errors; unknown `--targets` fail closed.
-7. **Lint + CI** — `.golangci.yml`, `ci.yml`, tests before release build.
-8. **Docs** — CHANGELOG, CONTRIBUTING, README test/vet commands, this file, `AGENTS.md`.
+1. `refactor(version)` — release version resolved from one package, stampable with `-ldflags`.
+2. `fix(scanner)` — walk errors surfaced; nested `index.js`, bare `.vscode` and the project folder name no longer detect stacks; SIIG-authored ignore files no longer feed detection (idempotency).
+3. `feat(output)` / `fix(output)` — unreadable paths reported; verbose order stable.
+4. `feat(rules)` + `fix(fetcher)` + `fix(cache)` — `rules.Validate`, 1 MiB response cap, strict JSON, cache read/write validation.
+5. `fix(writer)` — stable target order, one header per file, newline boundary, honest skip reason; close errors reported.
+6. `fix(matcher)` + `feat(cmd)` — project root passed in instead of `os.Getwd`, candidate list sorted and capped, `--no-cache` no longer deletes, `--clear-cache` added, repeated `--targets` collapsed.
+7. `feat(cmd)` — `--check` for CI.
+8. `fix(rules)` — duplicate/blank stack ids rejected at load.
+9. `chore(lint)` / `chore(deps)` / `ci` — golangci-lint v2, cobra + color upgrades, coverage gate, Go matrix, audit job, Dependabot, release stamping and smoke test, rule sync via pull request.
 
-### How to land (required for 85+)
+## What is left
 
-Do **not** squash into one commit. Suggested sequence:
+- **Keep the cadence.** Task capacity is mined from history, so it grows one
+  small change at a time. Next candidates, each a commit with its test:
+  `--json` machine-readable output, a golden-file end-to-end CLI test, cache
+  negative-lookup for 404 stacks, `output` printer assertions on content rather
+  than smoke calls.
+- **Branch protection + required checks** on `main` (repo setting, not a file).
+- **Release cadence**: cut `v2.0.1` once this batch is merged so the release
+  workflow publishes a stamped binary and the tag history stops being
+  single-author-only in one spot.
 
-```
-fix: detect npm libraries from package.json main/exports
-test: add matcher unit tests for targets and dedupe
-test: add writer tests using temp directories
-test: add scanner coverage for depth and skip dirs
-test: add cache Get/Set/stale tests with mocked HOME
-fix: validate stack IDs and unknown CLI targets
-ci: run go test and lint on push and pull requests
-docs: add CHANGELOG, CONTRIBUTING, and test commands
-```
+## Will not get you to 85
 
-Each commit includes the tests that pin that change.
-
-### After push, re-score
-
-Fresh clone should work with:
-
-```
-go test ./...
-go vet ./...
-go build -o siig .
-```
-
-If coverage is still thin, add `output` printer tests and a `cmd` dry-run test — not new packages.
-
-### Will not get you to 85 alone
-
-- More README prose
-- Docker
-- Fake bulk history
-- One giant “quality” commit
+- More README prose.
+- Docker, Kubernetes, or any service.
+- Splitting one behavior across five commits, or bundling ten into one.
+- Manufacturing contributor or review history. `History & Maintenance` measures
+  independent maintenance; a second account owned by the same person is a
+  misrepresentation to buyers, not a fix — and the report already reads the
+  single-author concentration.

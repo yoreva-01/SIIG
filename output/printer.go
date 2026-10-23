@@ -2,6 +2,7 @@ package output
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/fatih/color"
@@ -93,10 +94,11 @@ func PrintVerbose(scanResult *scanner.ScanResult, matchResult *matcher.MatchResu
 		fmt.Printf("  • %s (matched via: %s)\n", s.Rule.Name, dim(s.MatchedBy))
 	}
 
-	// print entries per target
+	// print entries per target, in the same fixed order the writer uses
 	fmt.Printf("\n%s\n", cyan("Entries by Target:"))
-	for target, entries := range matchResult.Entries {
-		if !matchResult.ApplicableTargets[target] {
+	for _, target := range matcher.AllTargets {
+		entries := matchResult.Entries[target]
+		if !matchResult.ApplicableTargets[target] || len(entries) == 0 {
 			continue
 		}
 		fmt.Printf("\n  %s:\n", bold(string(target)))
@@ -106,8 +108,14 @@ func PrintVerbose(scanResult *scanner.ScanResult, matchResult *matcher.MatchResu
 	}
 
 	if len(matchResult.VSCodeExclude) > 0 && matchResult.ApplicableTargets[matcher.TargetVSCode] {
-		fmt.Printf("\n  %s:\n", bold("vscode (files.exclude)"))
+		keys := make([]string, 0, len(matchResult.VSCodeExclude))
 		for key := range matchResult.VSCodeExclude {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+
+		fmt.Printf("\n  %s:\n", bold("vscode (files.exclude)"))
+		for _, key := range keys {
 			fmt.Printf("    %s: true\n", key)
 		}
 	}

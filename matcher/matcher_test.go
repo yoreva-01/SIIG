@@ -223,6 +223,46 @@ func TestMatch_offlineNeverFetches(t *testing.T) {
 	}
 }
 
+func TestMatch_offlineStillAppliesCachedRules(t *testing.T) {
+	isolateCacheHome(t)
+	if err := cache.Set("gleam", &rules.StackRule{ID: "gleam", Name: "Gleam", Rules: rules.StackRulesList{
+		Gitignore: []string{"build/"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	calls := stubFetch(t, func(id string) (*rules.StackRule, error) {
+		return nil, errors.New("must not be called while offline")
+	})
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "gleam.toml"), []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	res := Match(&scanner.ScanResult{}, nil, nil, Options{ProjectRoot: dir, Offline: true, UseCache: true})
+
+	if !reflect.DeepEqual(res.OnlineNames, []string{"Gleam"}) {
+		t.Fatalf("cached rule should apply offline, got %v", res.OnlineNames)
+	}
+	if !reflect.DeepEqual(res.Entries[TargetGitignore], []string{"build/"}) {
+		t.Fatalf("cached entries not merged: %v", res.Entries[TargetGitignore])
+	}
+	if len(*calls) != 0 {
+		t.Fatalf("offline run must not hit the network: %v", *calls)
+	}
+}
+
+func isolateCacheHome(t *testing.T) {
+	t.Helper()
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("HOMEDRIVE", "")
+	t.Setenv("HOMEPATH", "")
+}
+
 func TestMatch_mergesOnlineRulesInCandidateOrder(t *testing.T) {
 	calls := []string{}
 	var mu sync.Mutex
@@ -246,9 +286,12 @@ func TestMatch_mergesOnlineRulesInCandidateOrder(t *testing.T) {
 
 	res := Match(&scanner.ScanResult{}, nil, nil, Options{ProjectRoot: dir})
 
-	wantNames := []string{"Alpha (online)", "Mid (online)", "Zeta (online)"}
-	if !reflect.DeepEqual(res.DetectedNames, wantNames) {
-		t.Fatalf("DetectedNames = %v, want %v", res.DetectedNames, wantNames)
+	wantNames := []string{"Alpha", "Mid", "Zeta"}
+	if !reflect.DeepEqual(res.OnlineNames, wantNames) {
+		t.Fatalf("OnlineNames = %v, want %v", res.OnlineNames, wantNames)
+	}
+	if len(res.DetectedNames) != 0 {
+		t.Fatalf("fetched rules must not be reported as embedded: %v", res.DetectedNames)
 	}
 	wantEntries := []string{"alpha/build/", "mid/build/", "zeta/build/"}
 	if !reflect.DeepEqual(res.Entries[TargetGitignore], wantEntries) {
@@ -285,11 +328,7 @@ func TestMatch_capsOnlineFetches(t *testing.T) {
 }
 
 func TestResolveStack_skipsCacheWhenDisabled(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
-	t.Setenv("HOMEDRIVE", "")
-	t.Setenv("HOMEPATH", "")
+	isolateCacheHome(t)
 
 	cached := &rules.StackRule{ID: "gleam", Name: "FromCache"}
 	if err := cache.Set("gleam", cached); err != nil {
@@ -300,7 +339,7 @@ func TestResolveStack_skipsCacheWhenDisabled(t *testing.T) {
 		return &rules.StackRule{ID: id, Name: "FromNetwork"}, nil
 	})
 
-	got, err := resolveStack("gleam", true)
+	got, err := resolveStack("gleam", Options{UseCache: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -308,7 +347,7 @@ func TestResolveStack_skipsCacheWhenDisabled(t *testing.T) {
 		t.Fatalf("cache hit expected, got %+v calls=%v", got, *calls)
 	}
 
-	fresh, err := resolveStack("gleam", false)
+	fresh, err := resolveStack("gleam", Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -317,12 +356,28 @@ func TestResolveStack_skipsCacheWhenDisabled(t *testing.T) {
 	}
 }
 
+func TestResolveStack_offlineMissesWithoutNetwork(t *testing.T) {
+	isolateCacheHome(t)
+
+	calls := stubFetch(t, func(id string) (*rules.StackRule, error) {
+		return nil, errors.New("must not be called")
+	})
+
+	got, err := resolveStack("gleam", Options{Offline: true})
+	if err != nil || got != nil {
+		t.Fatalf("offline cache miss should be a plain miss, got %+v err=%v", got, err)
+	}
+	if len(*calls) != 0 {
+		t.Fatalf("offline run fetched %v", *calls)
+	}
+}
+
 func TestResolveStack_propagatesFetchError(t *testing.T) {
 	stubFetch(t, func(id string) (*rules.StackRule, error) {
 		return nil, errors.New("boom")
 	})
 
-	got, err := resolveStack("gleam", false)
+	got, err := resolveStack("gleam", Options{})
 	if err == nil || got != nil {
 		t.Fatalf("expected error, got %+v %v", got, err)
 	}

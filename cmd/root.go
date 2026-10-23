@@ -83,14 +83,8 @@ func runSiig(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to scan project: %w", err)
 	}
 
-	// print detected stacks
-	output.PrintDetected(scanResult)
+	// print paths the scanner could not read
 	output.PrintScanErrors(scanResult)
-
-	if len(scanResult.DetectedStacks) == 0 {
-		// still apply global rules
-		fmt.Println("Applying global rules only...")
-	}
 
 	var allowedTargets []matcher.Target
 	if targets != "" {
@@ -103,23 +97,31 @@ func runSiig(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// 4. match detected stacks against rules (with online fetch if not offline)
+	// 3. match detected stacks against rules (with online fetch if not offline)
 	matchResult := matcher.Match(scanResult, allRules, allowedTargets, matcher.Options{
 		ProjectRoot: cwd,
 		Offline:     offline,
 		UseCache:    !noCache,
 	})
 
+	// report what was applied — including rules fetched from siig-rules, which
+	// the scan alone cannot know about
+	output.PrintDetected(matchResult)
+	if len(matchResult.DetectedNames)+len(matchResult.OnlineNames) == 0 {
+		// still apply global rules
+		fmt.Println("Applying global rules only...")
+	}
+
 	// verbose output
 	if verbose {
 		output.PrintVerbose(scanResult, matchResult)
 	}
 
-	// 5. write to target files (--check never writes)
+	// 4. write to target files (--check never writes)
 	noWrite := dryRun || check
 	writeResults := writer.WriteAll(cwd, matchResult, noWrite)
 
-	// 6. print results
+	// 5. print results
 	switch {
 	case check:
 		output.PrintCheck(writeResults)

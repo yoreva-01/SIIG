@@ -19,19 +19,27 @@ var (
 	dim    = color.New(color.Faint).SprintFunc()
 )
 
-// PrintDetected prints the stacks the scanner recognised.
-func PrintDetected(result *scanner.ScanResult) {
-	if len(result.DetectedStacks) == 0 {
+// PrintDetected prints every stack SIIG applied rules for, including the ones
+// fetched from siig-rules because they are not in the embedded DB.
+func PrintDetected(result *matcher.MatchResult) {
+	names := detectedLine(result)
+	if len(names) == 0 {
 		fmt.Printf("%s No stacks detected\n", yellow("⚠"))
 		return
 	}
 
-	names := make([]string, 0, len(result.DetectedStacks))
-	for _, s := range result.DetectedStacks {
-		names = append(names, s.Rule.Name)
-	}
-
 	fmt.Printf("%s Detected: %s\n", green("✓"), bold(strings.Join(names, ", ")))
+}
+
+// detectedLine keeps embedded stacks first and marks the fetched ones, so a
+// reader can tell offline rules from network rules.
+func detectedLine(result *matcher.MatchResult) []string {
+	names := make([]string, 0, len(result.DetectedNames)+len(result.OnlineNames))
+	names = append(names, result.DetectedNames...)
+	for _, name := range result.OnlineNames {
+		names = append(names, name+" (online)")
+	}
+	return names
 }
 
 // PrintScanErrors warns about paths the scanner could not read, so a partial
@@ -102,6 +110,9 @@ func PrintVerbose(scanResult *scanner.ScanResult, matchResult *matcher.MatchResu
 	fmt.Printf("\n%s\n", cyan("Detected Stacks:"))
 	for _, s := range scanResult.DetectedStacks {
 		fmt.Printf("  • %s (matched via: %s)\n", s.Rule.Name, dim(s.MatchedBy))
+	}
+	for _, name := range matchResult.OnlineNames {
+		fmt.Printf("  • %s (matched via: %s)\n", name, dim("fetched from siig-rules"))
 	}
 
 	// print entries per target, in the same fixed order the writer uses

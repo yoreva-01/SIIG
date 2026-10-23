@@ -44,13 +44,16 @@ type MatchResult struct {
 	ApplicableTargets map[Target]bool
 	// Names of detected stacks for display
 	DetectedNames []string
+	// OnlineNames are stacks whose rules were fetched from siig-rules because
+	// they are not in the embedded DB.
+	OnlineNames []string
 }
 
 // Options controls one Match call.
 type Options struct {
 	// ProjectRoot is the directory being populated.
 	ProjectRoot string
-	// Offline skips every network request.
+	// Offline forbids outbound requests. Rules already in the cache still apply.
 	Offline bool
 	// UseCache is false when cached rules must be ignored for this run.
 	UseCache bool
@@ -104,14 +107,14 @@ func Match(scanResult *scanner.ScanResult, allRules []StackRule, allowedTargets 
 		mergeRuleEntries(result, &detected.Rule)
 	}
 
-	// online fetch: try to find rules for unknown stacks from siig-rules
-	if !opts.Offline {
+	// unknown stacks: cached rules apply even offline, the network does not
+	if !opts.Offline || opts.UseCache {
 		candidates := buildCandidates(opts.ProjectRoot, scanResult, allRules)
 		if len(candidates) > maxOnlineFetches {
 			candidates = candidates[:maxOnlineFetches]
 		}
 		if len(candidates) > 0 {
-			fetchAndMerge(result, candidates, opts.UseCache)
+			fetchAndMerge(result, candidates, opts)
 		}
 	}
 
@@ -303,22 +306,22 @@ func buildCandidates(root string, scanResult *scanner.ScanResult, allRules []Sta
 // fetchAndMerge resolves rules for candidate stack IDs concurrently and merges
 // them into the result, in candidate order so output does not depend on which
 // request finished first.
-func fetchAndMerge(result *MatchResult, candidates []string, useCache bool) {
-	resolved := fetchConcurrently(candidates, useCache)
+func fetchAndMerge(result *MatchResult, candidates []string, opts Options) {
+	resolved := fetchConcurrently(candidates, opts)
 
 	for _, id := range candidates {
 		rule := resolved[id]
 		if rule == nil {
 			continue
 		}
-		result.DetectedNames = append(result.DetectedNames, rule.Name+" (online)")
+		result.OnlineNames = append(result.OnlineNames, rule.Name)
 		mergeRuleEntries(result, rule)
 	}
 }
 
-// fetchConcurrently looks each candidate up in the cache and, when missing,
+// fetchConcurrently looks each candidate up in the cache and, when allowed,
 // online. At most maxConcurrentFetches requests are in flight.
-func fetchConcurrently(candidates []string, useCache bool) map[string]*rules.StackRule {
+func fetchConcurrently(candidates []string, opts Options) map[string]*rules.StackRule {
 	var (
 		mu       sync.Mutex
 		wg       sync.WaitGroup
@@ -334,7 +337,7 @@ func fetchConcurrently(candidates []string, useCache bool) map[string]*rules.Sta
 			defer wg.Done()
 			defer func() { <-sem }() // release semaphore slot
 
-			rule, err := resolveStack(stackID, useCache)
+			rule, err := resolveStack(stackID, opts)
 			if err != nil {
 				return // network error — silently skip
 			}
@@ -352,15 +355,21 @@ func fetchConcurrently(candidates []string, useCache bool) map[string]*rules.Sta
 	return resolved
 }
 
-// resolveStack returns the rule for a stack id from cache or network.
-func resolveStack(stackID string, useCache bool) (*rules.StackRule, error) {
-	if useCache {
+// resolveStack returns the rule for a stack id from cache, then from the
+// network — unless the run is offline, in which case a cache miss is simply a
+// miss.
+func resolveStack(stackID string, opts Options) (*rules.StackRule, error) {
+	if opts.UseCache {
 		rule, err := cache.Get(stackID)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "cache error for %s: %v\n", stackID, err)
 		} else if rule != nil {
 			return rule, nil
 		}
+	}
+
+	if opts.Offline {
+		return nil, nil
 	}
 
 	rule, err := fetchStack(stackID)
@@ -371,7 +380,7 @@ func resolveStack(stackID string, useCache bool) (*rules.StackRule, error) {
 		return nil, nil
 	}
 
-	if useCache {
+	if opts.UseCache {
 		if cacheErr := cache.Set(stackID, rule); cacheErr != nil {
 			fmt.Fprintf(os.Stderr, "cache write error for %s: %v\n", stackID, cacheErr)
 		}

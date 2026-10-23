@@ -24,10 +24,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: stable
 
@@ -36,11 +36,21 @@ jobs:
         env:
           INPUT_VERSION: ${{ inputs.version }}
         run: |
+          case "$GITHUB_REF" in
+            refs/tags/*)  VERSION="${GITHUB_REF#refs/tags/}" ;;
+            refs/heads/*) VERSION="dev-${GITHUB_REF#refs/heads/}" ;;
+            *)            VERSION="unknown" ;;
+          esac
           if [ -n "$INPUT_VERSION" ]; then
-            echo "VERSION=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
-          else
-            echo "VERSION=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+            VERSION="$INPUT_VERSION"
           fi
+          # A ref that leaked through the stripping would be stamped into every
+          # binary and printed by `siig --version`.
+          case "$VERSION" in
+            */*) echo "refusing to stamp a version containing a slash: $VERSION"; exit 1 ;;
+          esac
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "stamping binaries with $VERSION"
 
       - name: Test
         run: go test ./... -covermode=atomic -coverprofile=coverage.out
@@ -101,7 +111,7 @@ jobs:
 
       - name: Create GitHub Release
         if: github.event_name == 'push'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: ${{ steps.tag.outputs.VERSION }}
           generate_release_notes: true

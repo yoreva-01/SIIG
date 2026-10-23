@@ -118,17 +118,17 @@ func Get(stackID string) (*rules.StackRule, error) {
 	if err := json.Unmarshal(data, &rule); err != nil {
 		return nil, nil // corrupt file, treat as cache miss
 	}
+	if err := rules.Validate(&rule, stackID); err != nil {
+		return nil, nil // cached rule describes something else, re-fetch it
+	}
 
 	return &rule, nil
 }
 
 // Set saves a StackRule to cache and updates the metadata timestamp.
 func Set(stackID string, rule *rules.StackRule) error {
-	if err := rules.ValidateStackID(stackID); err != nil {
+	if err := rules.Validate(rule, stackID); err != nil {
 		return err
-	}
-	if rule == nil {
-		return fmt.Errorf("rule is required")
 	}
 	if err := ensureCacheDir(); err != nil {
 		return fmt.Errorf("cannot create cache dir: %w", err)

@@ -58,7 +58,7 @@ func TestGet_stale(t *testing.T) {
 
 func TestGet_missingFile(t *testing.T) {
 	isolateHome(t)
-	if err := Set("x", &rules.StackRule{ID: "x"}); err != nil {
+	if err := Set("x", &rules.StackRule{ID: "x", Name: "X"}); err != nil {
 		t.Fatal(err)
 	}
 	dir, err := cacheDir()
@@ -76,14 +76,50 @@ func TestGet_missingFile(t *testing.T) {
 
 func TestSet_rejectsBadID(t *testing.T) {
 	isolateHome(t)
-	if err := Set("../etc", &rules.StackRule{ID: "x"}); err == nil {
+	if err := Set("../etc", &rules.StackRule{ID: "x", Name: "X"}); err == nil {
 		t.Fatal("expected invalid id error")
+	}
+}
+
+func TestSet_rejectsRulesThatFailValidation(t *testing.T) {
+	isolateHome(t)
+	if err := Set("gleam", &rules.StackRule{ID: "other", Name: "Other"}); err == nil {
+		t.Fatal("expected mismatched id to be refused")
+	}
+	if err := Set("gleam", &rules.StackRule{ID: "gleam", Rules: rules.StackRulesList{
+		Gitignore: []string{"safe\n*"},
+	}}); err == nil {
+		t.Fatal("expected newline entry to be refused")
+	}
+	if IsCached("gleam") {
+		t.Fatal("nothing should have been written")
+	}
+}
+
+func TestGet_rejectsCachedRuleForAnotherStack(t *testing.T) {
+	isolateHome(t)
+	if err := Set("gleam", &rules.StackRule{ID: "gleam", Name: "Gleam"}); err != nil {
+		t.Fatal(err)
+	}
+
+	dir, err := cacheDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Simulate a cache file that does not describe the stack it is stored under.
+	if err := os.WriteFile(filepath.Join(dir, "gleam.json"), []byte(`{"id":"evil","name":"Evil"}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := Get("gleam")
+	if err != nil || got != nil {
+		t.Fatalf("mismatched cached rule must be treated as a miss, got %+v err=%v", got, err)
 	}
 }
 
 func TestClear(t *testing.T) {
 	isolateHome(t)
-	if err := Set("a", &rules.StackRule{ID: "a"}); err != nil {
+	if err := Set("a", &rules.StackRule{ID: "a", Name: "A"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := Clear(); err != nil {

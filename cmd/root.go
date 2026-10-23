@@ -7,14 +7,13 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/yv3000/siig/cache"
+	"github.com/yv3000/siig/internal/version"
 	"github.com/yv3000/siig/matcher"
 	"github.com/yv3000/siig/output"
 	"github.com/yv3000/siig/rules"
 	"github.com/yv3000/siig/scanner"
 	"github.com/yv3000/siig/writer"
 )
-
-const appVersion = "2.0.0"
 
 var (
 	dryRun  bool
@@ -33,7 +32,7 @@ and automatically populates .gitignore, .vercelignore, .dockerignore,
 and .vscode/settings.json with the correct entries.
 
 Zero config. One command. No more leaked secrets.`,
-	Version:      appVersion,
+	Version:      version.Version,
 	SilenceUsage: true,
 	RunE:         runSiig,
 }

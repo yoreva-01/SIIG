@@ -8,11 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/yv3000/siig/internal/version"
 	"github.com/yv3000/siig/matcher"
 )
-
-const version = "2.0.0"
-const siigHeader = "# Added by SIIG v" + version
 
 // WriteResult holds what happened when writing to one target
 type WriteResult struct {
@@ -118,7 +116,7 @@ func writeIgnoreFile(filePath string, entries []string, target matcher.Target, d
 	// build the content to append
 	var builder strings.Builder
 	builder.WriteString("\n")
-	builder.WriteString(siigHeader)
+	builder.WriteString(version.Header())
 	builder.WriteString("\n")
 	for _, entry := range newEntries {
 		builder.WriteString(entry)

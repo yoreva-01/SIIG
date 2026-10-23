@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/yv3000/siig/internal/version"
 	"github.com/yv3000/siig/matcher"
 )
 
@@ -28,7 +29,7 @@ func TestWriteIgnoreFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(body)
-	if !strings.Contains(text, "node_modules/") || !strings.Contains(text, siigHeader) {
+	if !strings.Contains(text, "node_modules/") || !strings.Contains(text, version.Header()) {
 		t.Fatalf("missing new entries:\n%s", text)
 	}
 	if strings.Count(text, ".env") != 1 {

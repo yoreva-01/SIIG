@@ -4,7 +4,15 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/yv3000/siig/internal/version"
 )
+
+func TestRootCmdUsesSharedVersion(t *testing.T) {
+	if rootCmd.Version != version.Version {
+		t.Fatalf("rootCmd.Version = %q, want %q", rootCmd.Version, version.Version)
+	}
+}
 
 func TestRunSiig_dryRunOffline(t *testing.T) {
 	dir := t.TempDir()

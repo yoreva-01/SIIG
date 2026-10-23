@@ -24,22 +24,26 @@ jobs:
 
       # The embedded DB ships inside every binary, so a sync is reviewed like
       # any other change: branch + pull request, never a direct push or tag.
+      #
+      # Stage first, then diff: a brand new stack arrives as an untracked file,
+      # and `git diff` on its own reports no change for those.
       - name: Open a pull request if rules changed
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if git diff --quiet -- rules/db; then
+          git add -- rules/db
+
+          if git diff --cached --quiet -- rules/db; then
             echo "siig-rules is already up to date. Nothing to open."
             exit 0
           fi
 
-          count=$(git diff --name-only -- rules/db | wc -l | tr -d ' ')
+          count=$(git diff --cached --name-only -- rules/db | wc -l | tr -d ' ')
           branch="bot/sync-rules-$(date -u +%Y%m%d)"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$branch"
-          git add rules/db
           git commit -m "fix(rules): sync ${count} stack rule file(s) from siig-rules"
           git push -u origin "$branch"
 

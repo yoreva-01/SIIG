@@ -276,6 +276,7 @@ func writeVSCodeSettings(filePath string, excludes map[string]bool, dryRun bool)
 		result.SkipReason = fmt.Sprintf("failed to marshal JSON: %v", err)
 		return result
 	}
+	output = append(output, '\n')
 
 	// ensure .vscode directory exists
 	dir := filepath.Dir(filePath)

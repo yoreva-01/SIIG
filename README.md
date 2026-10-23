@@ -79,7 +79,7 @@ irm https://raw.githubusercontent.com/yv3000/SIIG/main/scripts/uninstall.ps1 | i
 curl -fsSL https://raw.githubusercontent.com/yv3000/SIIG/main/scripts/uninstall.sh | sh
 ```
 
-Removes the binary and cleans up the PATH entry. Nothing else is touched — SIIG never modifies anything outside your project directory during normal use.
+Removes the binary, cleans up the PATH entry and deletes `~/.siig` (the fetched-rule cache). Nothing else is touched — SIIG never modifies anything outside your project directory during normal use.
 
 ---
 

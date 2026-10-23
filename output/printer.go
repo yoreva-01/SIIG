@@ -70,9 +70,19 @@ func PrintResults(results []writer.WriteResult) {
 }
 
 // PrintDryRun prints what would happen without actually writing
-func PrintDryRun(results []writer.WriteResult, matchResult *matcher.MatchResult) {
+func PrintDryRun(results []writer.WriteResult) {
 	fmt.Printf("\n%s\n\n", bold("DRY RUN — nothing will be written"))
+	printPlan(results)
+}
 
+// PrintCheck prints the pending plan for --check, which writes nothing but is
+// not a dry run of a command the user asked to run.
+func PrintCheck(results []writer.WriteResult) {
+	fmt.Printf("\n%s\n\n", bold("CHECK — nothing will be written"))
+	printPlan(results)
+}
+
+func printPlan(results []writer.WriteResult) {
 	for _, r := range results {
 		targetName := targetDisplayName(r.Target)
 

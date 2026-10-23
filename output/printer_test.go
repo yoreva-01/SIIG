@@ -91,10 +91,21 @@ func TestPrintDryRun(t *testing.T) {
 		PrintDryRun([]writer.WriteResult{
 			{Target: matcher.TargetDockerignore, EntriesAdded: 1},
 			{Target: matcher.TargetNpmignore, Skipped: true, SkipReason: "no entries to add"},
-		}, &matcher.MatchResult{})
+		})
 	})
 
 	assertContains(t, out, "DRY RUN — nothing will be written", ".dockerignore", "1 entries would be added", "skipped (no entries to add)")
+}
+
+func TestPrintCheck(t *testing.T) {
+	out := captureStdout(t, func() {
+		PrintCheck([]writer.WriteResult{{Target: matcher.TargetGitignore, EntriesAdded: 3}})
+	})
+
+	assertContains(t, out, "CHECK — nothing will be written", ".gitignore", "3 entries would be added")
+	if strings.Contains(out, "DRY RUN") {
+		t.Fatalf("--check must not report a dry run:\n%s", out)
+	}
 }
 
 func TestPrintNoChanges(t *testing.T) {

@@ -122,13 +122,13 @@ func runSiig(cmd *cobra.Command, args []string) error {
 	// 6. print results
 	switch {
 	case check:
-		output.PrintDryRun(writeResults, matchResult)
+		output.PrintCheck(writeResults)
 		if missing := pendingEntries(writeResults); missing > 0 {
 			return fmt.Errorf("ignore files are out of date: %d entries missing (run `siig` to add them)", missing)
 		}
 		output.PrintNoChanges()
 	case noWrite:
-		output.PrintDryRun(writeResults, matchResult)
+		output.PrintDryRun(writeResults)
 	case pendingEntries(writeResults) == 0:
 		output.PrintNoChanges()
 	default:

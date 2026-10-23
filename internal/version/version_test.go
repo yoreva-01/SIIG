@@ -1,6 +1,19 @@
 package version
 
-import "testing"
+import (
+	"regexp"
+	"testing"
+)
+
+// semver is the shape a source build must fall back to; a release tag is stamped
+// on top of it with -ldflags and is allowed to carry the leading "v".
+var semver = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
+
+func TestDefaultVersionIsSemver(t *testing.T) {
+	if !semver.MatchString(Version) {
+		t.Fatalf("default Version %q is not X.Y.Z", Version)
+	}
+}
 
 func TestHeaderUsesVersion(t *testing.T) {
 	old := Version
@@ -12,8 +25,8 @@ func TestHeaderUsesVersion(t *testing.T) {
 	}
 }
 
-func TestDefaultVersionIsSemver(t *testing.T) {
-	if Version == "" || Version[0] != '2' {
-		t.Fatalf("unexpected default version %q", Version)
+func TestMarkerIsVersionIndependent(t *testing.T) {
+	if Header()[:len(Marker)] != Marker {
+		t.Fatalf("Header %q must start with the marker %q", Header(), Marker)
 	}
 }

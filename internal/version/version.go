@@ -2,7 +2,7 @@ package version
 
 // Version is stamped at release time with
 // -ldflags "-X github.com/yv3000/siig/internal/version.Version=vX.Y.Z".
-var Version = "2.0.0"
+var Version = "2.0.1"
 
 // Marker is the version-independent prefix of SIIG's block header. Readers use
 // it to recognise files SIIG wrote earlier.

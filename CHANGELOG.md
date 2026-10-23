@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Stacks whose rule was fetched from siig-rules now appear in the detected list as `<Name> (online)`, and in `--verbose` with their source. The online result was computed but never shown, so the documented `Detected: Node.js, Gleam (online)` output could not happen.
+- `--offline` applies rules already present in the local cache, as the README states; it used to skip the cache entirely and fall back to embedded rules only.
+
 ## 2.0.1 — 2026-10-23
 
 ### Added

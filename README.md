@@ -32,7 +32,7 @@ $ siig
 - You run `siig` once. It figures out everything else.
 - Works on any project — new or existing, any language, any framework.
 - **110 stacks embedded** — works fully offline, no internet needed for common stacks.
-- **Unknown stack?** SIIG silently fetches it from [siig-rules](https://github.com/yv3000/siig-rules), caches it locally for 7 days, and applies it — no manual input needed.
+- **Unknown stack?** SIIG silently fetches it from [siig-rules](https://github.com/yv3000/siig-rules), caches it locally for 7 days, and applies it — no manual input needed. The lookup uses the unrecognised file's own name as the stack id, so `gleam.toml` resolves the `gleam` rule.
 - **Idempotent** — running it twice produces the same result. Safe to run anytime.
 - **Never touches source code** — only reads file/dir names, only writes to ignore files.
 
@@ -469,7 +469,7 @@ No. SIIG only appends entries that aren't already present. Your existing content
 Yes. SIIG never touches source code — only ignore files. Run `siig --dry-run` first if you want to preview exactly what would be added.
 
 **What if my stack isn't in the embedded 110?**
-SIIG automatically tries to fetch it from [siig-rules](https://github.com/yv3000/siig-rules) on demand. If found, it's cached locally for 7 days and applied — no action needed from you. If it doesn't exist there either, it's silently skipped. You can also [contribute rules](https://github.com/yv3000/siig-rules/blob/main/CONTRIBUTING.md) for it.
+SIIG automatically tries to fetch it from [siig-rules](https://github.com/yv3000/siig-rules) on demand. If found, it's cached locally for 7 days and applied — no action needed from you. If it doesn't exist there either, it's silently skipped. The request is built from the unrecognised file's name, so a project with `gleam.toml` asks for the `gleam` rule; a stack whose marker file is named differently (PureScript's `spago.dhall`) needs the rule to be embedded, which happens through the sync PR and the next release. You can also [contribute rules](https://github.com/yv3000/siig-rules/blob/main/CONTRIBUTING.md) for it.
 
 **Does SIIG read my `.env` files or source code?**
 No. Scanning uses file and directory names. It may read root `package.json` for library detection and the ignore / VS Code settings files it writes. `.env` and source are never read.

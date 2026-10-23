@@ -1,7 +1,6 @@
 package writer
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -22,59 +21,70 @@ type WriteResult struct {
 	Created      bool // file was created fresh
 }
 
+// ignoreFiles lists the append-style targets in the order they are reported.
+// A fixed order keeps CLI output stable between runs, which map iteration does not.
+var ignoreFiles = []struct {
+	target   matcher.Target
+	filename string
+}{
+	{matcher.TargetGitignore, ".gitignore"},
+	{matcher.TargetVercelignore, ".vercelignore"},
+	{matcher.TargetDockerignore, ".dockerignore"},
+	{matcher.TargetNpmignore, ".npmignore"},
+}
+
 // WriteAll writes entries to all applicable target files.
 // Caveman: read existing, figure out what's new, slap it on the end.
 func WriteAll(projectRoot string, matchResult *matcher.MatchResult, dryRun bool) []WriteResult {
 	var results []WriteResult
 
-	// handle ignore-style files
-	ignoreTargets := map[matcher.Target]string{
-		matcher.TargetGitignore:    ".gitignore",
-		matcher.TargetVercelignore: ".vercelignore",
-		matcher.TargetDockerignore: ".dockerignore",
-		matcher.TargetNpmignore:    ".npmignore",
-	}
-
-	for target, filename := range ignoreTargets {
-		if !matchResult.ApplicableTargets[target] {
+	for _, target := range ignoreFiles {
+		filePath := filepath.Join(projectRoot, target.filename)
+		if !matchResult.ApplicableTargets[target.target] {
 			results = append(results, WriteResult{
-				Target:     target,
-				FilePath:   filename,
+				Target:     target.target,
+				FilePath:   target.filename,
 				Skipped:    true,
 				SkipReason: "not applicable for this project",
 			})
 			continue
 		}
 
-		entries := matchResult.Entries[target]
+		entries := matchResult.Entries[target.target]
 		if len(entries) == 0 {
 			results = append(results, WriteResult{
-				Target:     target,
-				FilePath:   filename,
+				Target:     target.target,
+				FilePath:   target.filename,
 				Skipped:    true,
 				SkipReason: "no entries to add",
 			})
 			continue
 		}
 
-		filePath := filepath.Join(projectRoot, filename)
-		result := writeIgnoreFile(filePath, entries, target, dryRun)
-		results = append(results, result)
+		results = append(results, writeIgnoreFile(filePath, entries, target.target, dryRun))
 	}
 
 	// handle vscode settings
-	if matchResult.ApplicableTargets[matcher.TargetVSCode] && len(matchResult.VSCodeExclude) > 0 {
-		filePath := filepath.Join(projectRoot, ".vscode", "settings.json")
-		result := writeVSCodeSettings(filePath, matchResult.VSCodeExclude, dryRun)
-		results = append(results, result)
-	} else {
+	reason := ""
+	switch {
+	case !matchResult.ApplicableTargets[matcher.TargetVSCode]:
+		reason = "no .vscode directory found"
+	case len(matchResult.VSCodeExclude) == 0:
+		reason = "no entries to add"
+	}
+
+	if reason != "" {
 		results = append(results, WriteResult{
 			Target:     matcher.TargetVSCode,
 			FilePath:   ".vscode/settings.json",
 			Skipped:    true,
-			SkipReason: "no .vscode directory found",
+			SkipReason: reason,
 		})
+		return results
 	}
+
+	filePath := filepath.Join(projectRoot, ".vscode", "settings.json")
+	results = append(results, writeVSCodeSettings(filePath, matchResult.VSCodeExclude, dryRun))
 
 	return results
 }
@@ -86,13 +96,12 @@ func writeIgnoreFile(filePath string, entries []string, target matcher.Target, d
 		FilePath: filePath,
 	}
 
-	// read existing entries
-	existing := readExistingEntries(filePath)
+	existing := readIgnoreFile(filePath)
 
 	// figure out what's actually new
 	var newEntries []string
 	for _, entry := range entries {
-		if !existing[entry] {
+		if !existing.entries[entry] {
 			newEntries = append(newEntries, entry)
 		}
 	}
@@ -104,26 +113,12 @@ func writeIgnoreFile(filePath string, entries []string, target matcher.Target, d
 	}
 
 	result.EntriesAdded = len(newEntries)
+	result.Created = !existing.exists
 
 	if dryRun {
 		return result
 	}
 
-	// check if file exists
-	_, err := os.Stat(filePath)
-	result.Created = os.IsNotExist(err)
-
-	// build the content to append
-	var builder strings.Builder
-	builder.WriteString("\n")
-	builder.WriteString(version.Header())
-	builder.WriteString("\n")
-	for _, entry := range newEntries {
-		builder.WriteString(entry)
-		builder.WriteString("\n")
-	}
-
-	// append or create
 	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		result.Skipped = true
@@ -132,14 +127,75 @@ func writeIgnoreFile(filePath string, entries []string, target matcher.Target, d
 	}
 	defer f.Close()
 
-	_, err = f.WriteString(builder.String())
-	if err != nil {
+	if _, err := f.WriteString(ignoreBlock(newEntries, existing)); err != nil {
 		result.Skipped = true
 		result.SkipReason = fmt.Sprintf("failed to write: %v", err)
 		return result
 	}
 
 	return result
+}
+
+// ignoreBlock renders the lines to append. The SIIG header is written once per
+// file — re-emitting it buried a duplicate marker under the file on every run
+// that added anything.
+func ignoreBlock(newEntries []string, existing ignoreFile) string {
+	var builder strings.Builder
+
+	if !existing.hasMarker {
+		if existing.size > 0 {
+			if !existing.endsWithNewline {
+				builder.WriteString("\n")
+			}
+			builder.WriteString("\n")
+		}
+		builder.WriteString(version.Header())
+		builder.WriteString("\n")
+	} else if !existing.endsWithNewline {
+		builder.WriteString("\n")
+	}
+
+	for _, entry := range newEntries {
+		builder.WriteString(entry)
+		builder.WriteString("\n")
+	}
+
+	return builder.String()
+}
+
+// ignoreFile is what a target file looked like before we touched it.
+type ignoreFile struct {
+	entries         map[string]bool
+	exists          bool
+	hasMarker       bool
+	size            int
+	endsWithNewline bool
+}
+
+// readIgnoreFile loads an ignore file, tolerating one that does not exist yet.
+func readIgnoreFile(filePath string) ignoreFile {
+	file := ignoreFile{entries: make(map[string]bool), endsWithNewline: true}
+
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return file
+	}
+
+	file.exists = true
+	file.size = len(data)
+	file.hasMarker = strings.Contains(string(data), version.Marker)
+	if file.size > 0 {
+		file.endsWithNewline = data[file.size-1] == '\n'
+	}
+
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" && !strings.HasPrefix(line, "#") {
+			file.entries[line] = true
+		}
+	}
+
+	return file
 }
 
 // writeVSCodeSettings merges files.exclude into .vscode/settings.json
@@ -229,25 +285,4 @@ func writeVSCodeSettings(filePath string, excludes map[string]bool, dryRun bool)
 	}
 
 	return result
-}
-
-// readExistingEntries reads an ignore file and returns a set of existing entries
-func readExistingEntries(filePath string) map[string]bool {
-	entries := make(map[string]bool)
-
-	f, err := os.Open(filePath)
-	if err != nil {
-		return entries // file doesn't exist yet, empty set
-	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line != "" && !strings.HasPrefix(line, "#") {
-			entries[line] = true
-		}
-	}
-
-	return entries
 }

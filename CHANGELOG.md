@@ -2,11 +2,33 @@
 
 ## Unreleased
 
-- Detect npm libraries from root `package.json` `main` / `exports` so `.npmignore` can apply.
-- Reject unknown `--targets` values and unsafe remote stack IDs.
-- Cobra commands return errors instead of calling `os.Exit` from `Run`.
-- Automated tests for matcher, writer, scanner, cache, rules, and fetcher validation.
-- CI runs `go test`, `go vet`, and golangci-lint on push and pull requests.
+### Added
+
+- `siig --check` — reports what is missing and exits 1, so CI can enforce up-to-date ignore files.
+- `siig --clear-cache` — deletes the locally cached remote rules.
+- `internal/version` — one version source, stamped from the release tag with `-ldflags`.
+- CI: coverage profile with an enforced 80% total gate, Go matrix (1.21 + stable), `govulncheck` audit job, Dependabot for modules and actions.
+- Release workflow: version stamping, coverage/vet gates, and a smoke test that runs the built binary (`--version`, `--check`, write-then-check).
+
+### Changed
+
+- `--no-cache` now ignores cached rules for the run instead of deleting `~/.siig/cache`.
+- Scanner surfaces paths it could not read instead of silently skipping them.
+- Fetched and cached rules are size-capped, parsed with unknown fields rejected, and validated against the requested stack id.
+- Target reporting and `--verbose` output are deterministic.
+- `.github/workflows/sync-rules.yml` opens a pull request instead of committing and tagging `main` directly.
+- golangci-lint moved to v2 configuration; `errcheck` findings fixed rather than excluded.
+- Upgraded `cobra` to v1.9.1 and `fatih/color` to v1.18.0.
+
+### Fixed
+
+- A second run detected stacks from the ignore files the first run wrote, breaking the idempotency promise.
+- `src/index.js` reported an Express server; any `.vscode` folder reported a VS Code extension; a project directory named after a stack detected that stack.
+- `--targets git,gitignore,git` processed the same target repeatedly.
+- The writer re-emitted its `# Added by SIIG` header on every append and could glue a block onto a last line that had no newline.
+- The online fallback looked at the process working directory rather than the project being populated.
+- Unknown duplicate or blank stack ids in `rules/db/` are rejected at load time.
+- Release binaries reported a hardcoded version regardless of the tag.
 
 ## 2.0.0
 

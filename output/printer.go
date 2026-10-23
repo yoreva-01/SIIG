@@ -33,6 +33,24 @@ func PrintDetected(result *scanner.ScanResult) {
 	fmt.Printf("%s Detected: %s\n", green("✓"), bold(strings.Join(names, ", ")))
 }
 
+// PrintScanErrors warns about paths the scanner could not read, so a partial
+// scan is never mistaken for a complete one.
+func PrintScanErrors(result *scanner.ScanResult) {
+	const maxListed = 5
+	if len(result.ScanErrors) == 0 {
+		return
+	}
+
+	fmt.Printf("%s %d path(s) could not be read — results may be incomplete\n", yellow("⚠"), len(result.ScanErrors))
+	for i, e := range result.ScanErrors {
+		if i == maxListed {
+			fmt.Printf("  %s\n", dim(fmt.Sprintf("... and %d more", len(result.ScanErrors)-maxListed)))
+			break
+		}
+		fmt.Printf("  %s\n", dim(e))
+	}
+}
+
 // PrintResults prints the write results summary
 func PrintResults(results []writer.WriteResult) {
 	for _, r := range results {

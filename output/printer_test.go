@@ -9,6 +9,16 @@ import (
 	"github.com/yv3000/siig/writer"
 )
 
+func TestPrintScanErrors(t *testing.T) {
+	PrintScanErrors(&scanner.ScanResult{})
+	PrintScanErrors(&scanner.ScanResult{ScanErrors: []string{"a: denied"}})
+	many := make([]string, 9)
+	for i := range many {
+		many[i] = "x: denied"
+	}
+	PrintScanErrors(&scanner.ScanResult{ScanErrors: many})
+}
+
 func TestPrinters(t *testing.T) {
 	empty := &scanner.ScanResult{}
 	PrintDetected(empty)

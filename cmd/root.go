@@ -76,6 +76,7 @@ func runSiig(cmd *cobra.Command, args []string) error {
 
 	// print detected stacks
 	output.PrintDetected(scanResult)
+	output.PrintScanErrors(scanResult)
 
 	if len(scanResult.DetectedStacks) == 0 {
 		// still apply global rules

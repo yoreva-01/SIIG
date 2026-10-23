@@ -39,15 +39,15 @@ jobs:
           fi
 
           count=$(git diff --cached --name-only -- rules/db | wc -l | tr -d ' ')
-          branch="bot/sync-rules-$(date -u +%Y%m%d)"
+          # Unique per run: a manual re-run on the same day must not collide
+          # with the branch an earlier run pushed.
+          branch="bot/sync-rules-$(date -u +%Y%m%d)-${GITHUB_RUN_NUMBER}"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$branch"
           git commit -m "fix(rules): sync ${count} stack rule file(s) from siig-rules"
-          # --force-with-lease so a manual re-run on the same day replaces the
-          # bot's own branch instead of failing on a non-fast-forward push.
-          git push --force-with-lease -u origin "$branch"
+          git push -u origin "$branch"
 
           gh pr create \
             --base main \

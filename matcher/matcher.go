@@ -177,8 +177,17 @@ func dedupe(items []string) []string {
 }
 
 // ParseTargets converts user-provided target strings to Target values.
+// Repeated names collapse into one entry, keeping the order they first appeared.
 func ParseTargets(targets []string) ([]Target, error) {
 	var result []Target
+	seen := make(map[Target]bool, len(targets))
+	add := func(target Target) {
+		if !seen[target] {
+			seen[target] = true
+			result = append(result, target)
+		}
+	}
+
 	for _, raw := range targets {
 		t := strings.TrimSpace(strings.ToLower(raw))
 		if t == "" {
@@ -186,15 +195,15 @@ func ParseTargets(targets []string) ([]Target, error) {
 		}
 		switch t {
 		case "git", "gitignore":
-			result = append(result, TargetGitignore)
+			add(TargetGitignore)
 		case "vercel", "vercelignore":
-			result = append(result, TargetVercelignore)
+			add(TargetVercelignore)
 		case "docker", "dockerignore":
-			result = append(result, TargetDockerignore)
+			add(TargetDockerignore)
 		case "npm", "npmignore":
-			result = append(result, TargetNpmignore)
+			add(TargetNpmignore)
 		case "vscode":
-			result = append(result, TargetVSCode)
+			add(TargetVSCode)
 		default:
 			return nil, fmt.Errorf("unknown target %q (want git, vercel, docker, npm, vscode)", raw)
 		}

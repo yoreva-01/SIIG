@@ -41,7 +41,7 @@ type StackRulesList struct {
 }
 
 // LoadAll reads every JSON file from the embedded rules/db/ directory
-// and returns a slice of StackRule. Caveman style — just read em all, no fancy stuff.
+// and returns a slice of StackRule.
 func LoadAll() ([]StackRule, error) {
 	var rules []StackRule
 

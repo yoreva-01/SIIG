@@ -33,8 +33,8 @@ var ignoreFiles = []struct {
 	{matcher.TargetNpmignore, ".npmignore"},
 }
 
-// WriteAll writes entries to all applicable target files.
-// Caveman: read existing, figure out what's new, slap it on the end.
+// WriteAll writes entries to all applicable target files. Each file is read
+// first so only entries it does not already contain get appended.
 func WriteAll(projectRoot string, matchResult *matcher.MatchResult, dryRun bool) []WriteResult {
 	var results []WriteResult
 

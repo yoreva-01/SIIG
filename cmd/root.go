@@ -56,12 +56,9 @@ func Execute() {
 	}
 }
 
-// runSiig is the main logic. Caveman flow:
-// 1. Load rules
-// 2. Scan project
-// 3. Match rules
-// 4. Write files
-// 5. Print what happened
+// runSiig loads the embedded rules, scans the working directory, merges the
+// matching rules into per-target entries, writes the applicable files and then
+// reports what happened.
 func runSiig(cmd *cobra.Command, args []string) error {
 	if clearCache {
 		if err := cache.Clear(); err != nil {

@@ -19,7 +19,7 @@ var (
 	dim    = color.New(color.Faint).SprintFunc()
 )
 
-// PrintDetected prints what stacks were found. Caveman print — just dump it out.
+// PrintDetected prints the stacks the scanner recognised.
 func PrintDetected(result *scanner.ScanResult) {
 	if len(result.DetectedStacks) == 0 {
 		fmt.Printf("%s No stacks detected\n", yellow("⚠"))

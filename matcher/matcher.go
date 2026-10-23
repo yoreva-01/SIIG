@@ -65,8 +65,8 @@ const maxOnlineFetches = 10
 // maxConcurrentFetches bounds parallel outbound requests.
 const maxConcurrentFetches = 5
 
-// Match takes scan results and all rules, produces a consolidated MatchResult.
-// Caveman logic: just loop through everything, merge it all together.
+// Match takes scan results and all rules, produces a consolidated MatchResult
+// by merging the global rule and every detected stack.
 // If opts.Offline is false, also tries fetching unknown stacks from siig-rules.
 func Match(scanResult *scanner.ScanResult, allRules []StackRule, allowedTargets []Target, opts Options) *MatchResult {
 	result := &MatchResult{
@@ -222,8 +222,7 @@ var genericNames = map[string]bool{
 }
 
 // buildCandidates extracts probable stack IDs from the project root that did
-// not match any embedded rule. Caveman: take filename without extension,
-// lowercase it. The result is sorted so a run is reproducible.
+// not match any embedded rule: the lowercased file name without its extension.
 func buildCandidates(root string, scanResult *scanner.ScanResult, allRules []StackRule) []string {
 	// collect all detect files/dirs from embedded rules to know what's "matched"
 	matchedFiles := make(map[string]bool)

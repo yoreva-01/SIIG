@@ -1,0 +1,15 @@
+# Go, JSON and workflow files must stay LF: gofmt reports a CRLF working copy
+# as unformatted, and rules/db/*.json is parsed by SIIG and copied verbatim.
+* text=auto eol=lf
+
+*.go text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.sh text eol=lf
+
+*.ps1 text eol=crlf
+
+*.exe binary
+*.test binary

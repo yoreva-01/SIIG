@@ -56,19 +56,28 @@ func assertContains(t *testing.T, out string, want ...string) {
 
 func TestPrintDetected(t *testing.T) {
 	out := captureStdout(t, func() {
-		PrintDetected(&scanner.ScanResult{})
+		PrintDetected(&matcher.MatchResult{})
 	})
 	assertContains(t, out, "No stacks detected")
 
 	out = captureStdout(t, func() {
-		PrintDetected(&scanner.ScanResult{
-			DetectedStacks: []scanner.DetectedStack{
-				{Rule: rules.StackRule{Name: "Go"}},
-				{Rule: rules.StackRule{Name: "Node.js"}},
-			},
-		})
+		PrintDetected(&matcher.MatchResult{DetectedNames: []string{"Go", "Node.js"}})
 	})
 	assertContains(t, out, "Detected:", "Go, Node.js")
+	if strings.Contains(out, "online") {
+		t.Fatalf("embedded stacks must not be marked online:\n%s", out)
+	}
+}
+
+func TestPrintDetectedMarksFetchedRules(t *testing.T) {
+	out := captureStdout(t, func() {
+		PrintDetected(&matcher.MatchResult{
+			DetectedNames: []string{"Node.js"},
+			OnlineNames:   []string{"Gleam"},
+		})
+	})
+
+	assertContains(t, out, "Detected:", "Node.js, Gleam (online)")
 }
 
 func TestPrintResults(t *testing.T) {
@@ -138,6 +147,8 @@ func TestPrintVerbose_isStableAndOrdered(t *testing.T) {
 			matcher.TargetVSCode:       {"ignored"},
 		},
 		VSCodeExclude:     map[string]bool{"zz": true, "aa": true},
+		DetectedNames:     []string{"Go"},
+		OnlineNames:       []string{"Gleam"},
 		ApplicableTargets: map[matcher.Target]bool{matcher.TargetGitignore: true, matcher.TargetDockerignore: true, matcher.TargetVSCode: true},
 	}
 
@@ -147,7 +158,7 @@ func TestPrintVerbose_isStableAndOrdered(t *testing.T) {
 		t.Fatal("verbose output must not depend on map iteration order")
 	}
 
-	assertContains(t, first, "Detected Stacks:", "Go", "matched via: go.mod", ".env", "node_modules/", "vscode (files.exclude)")
+	assertContains(t, first, "Detected Stacks:", "Go", "matched via: go.mod", "Gleam", "fetched from siig-rules", ".env", "node_modules/", "vscode (files.exclude)")
 	if strings.Index(first, "gitignore") > strings.Index(first, "dockerignore") {
 		t.Fatalf("targets should follow writer order:\n%s", first)
 	}

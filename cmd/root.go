@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/yv3000/siig/cache"
 	"github.com/yv3000/siig/internal/version"
 	"github.com/yv3000/siig/matcher"
 	"github.com/yv3000/siig/output"
@@ -15,11 +16,12 @@ import (
 )
 
 var (
-	dryRun  bool
-	targets string
-	verbose bool
-	offline bool
-	noCache bool
+	dryRun     bool
+	targets    string
+	verbose    bool
+	offline    bool
+	noCache    bool
+	clearCache bool
 )
 
 // rootCmd is the base command — just run "siig" and it does the thing
@@ -42,6 +44,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&verbose, "verbose", false, "Print every file checked and rule applied")
 	rootCmd.Flags().BoolVar(&offline, "offline", false, "Skip all network requests, use embedded rules and cache only")
 	rootCmd.Flags().BoolVar(&noCache, "no-cache", false, "Ignore rules cached from earlier runs and fetch fresh ones")
+	rootCmd.Flags().BoolVar(&clearCache, "clear-cache", false, "Delete rules cached from earlier runs and exit")
 }
 
 // Execute runs the root command — called from main.go
@@ -58,6 +61,14 @@ func Execute() {
 // 4. Write files
 // 5. Print what happened
 func runSiig(cmd *cobra.Command, args []string) error {
+	if clearCache {
+		if err := cache.Clear(); err != nil {
+			return fmt.Errorf("could not clear cached rules: %w", err)
+		}
+		fmt.Println("✓ Cached rules deleted")
+		return nil
+	}
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("cannot determine current directory: %w", err)

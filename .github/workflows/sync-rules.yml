@@ -27,6 +27,10 @@ jobs:
       #
       # Stage first, then diff: a brand new stack arrives as an untracked file,
       # and `git diff` on its own reports no change for those.
+      #
+      # GitHub holds CI on a PR opened by a workflow token until a maintainer
+      # approves the run (Settings → Actions → General → allow, or the
+      # "Awaiting approval" button on the workflow run).
       - name: Open a pull request if rules changed
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

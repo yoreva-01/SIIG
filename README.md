@@ -12,7 +12,7 @@
 
 <h1 align="center">SIIG — She Is Ignoring</h1>
 <p align="center"><b>Zero-config CLI that auto-populates ignore files based on your project's tech stack.</b></p>
-<p align="center">One command. No prompts. No config. Under 200ms. 110 stacks supported out of the box — and any stack beyond that is fetched automatically on demand.</p>
+<p align="center">One command. No prompts. No config. Under 200ms. 122 stacks supported out of the box — and any stack beyond that is fetched automatically on demand.</p>
 
 ---
 
@@ -31,7 +31,7 @@ $ siig
 
 - You run `siig` once. It figures out everything else.
 - Works on any project — new or existing, any language, any framework.
-- **110 stacks embedded** — works fully offline, no internet needed for common stacks.
+- **122 stacks embedded** — works fully offline, no internet needed for common stacks.
 - **Unknown stack?** SIIG silently fetches it from [siig-rules](https://github.com/yv3000/siig-rules), caches it locally for 7 days, and applies it — no manual input needed. The lookup uses the unrecognised file's own name as the stack id, so `gleam.toml` resolves the `gleam` rule.
 - **Idempotent** — running it twice produces the same result. Safe to run anytime.
 - **Never touches source code** — only reads file/dir names, only writes to ignore files.
@@ -154,7 +154,9 @@ Example: `siig --targets git,vercel,docker`
 
 ---
 
-## Supported Stacks (110)
+## Supported Stacks (122)
+
+The category tables below are highlights. The complete list, generated from `rules/db/`, is at the end of this section.
 
 ### Languages
 
@@ -187,6 +189,15 @@ Example: `siig --targets git,vercel,docker`
 | Elixir | `mix.exs` |
 | Erlang | `rebar.config`, `*.erl` |
 | Groovy | `*.groovy`, `Jenkinsfile` |
+| Gleam | `gleam.toml` |
+| Nim | `nim.cfg`, `*.nimble`, `config.nims` |
+| OCaml | `dune-project`, `*.opam` |
+| Crystal | `shard.yml` |
+| Fortran | `fpm.toml`, `*.f90` |
+| D | `dub.sdl`, `dub.json` |
+| PureScript | `spago.dhall`, `packages.dhall` |
+| Lean 4 | `lean-toolchain`, `lakefile.lean` |
+| Coq | `_CoqProject` |
 
 ### Frontend Frameworks
 
@@ -314,6 +325,15 @@ Example: `siig --targets git,vercel,docker`
 | VS Code Extension | `.vscodeignore` |
 | Wails (Go Desktop) | `wails.json` |
 | WordPress | `wp-config.php` |
+| LaTeX | `latexmkrc`, `*.tex` |
+| PlatformIO | `platformio.ini` |
+| Solidity | `foundry.toml`, `hardhat.config.*` |
+
+### All 122 rule files
+
+`global` is the always-applied baseline rather than a detected stack.
+
+`android` · `angular` · `ansible` · `apache` · `astro` · `aws-cdk` · `bazel` · `bun` · `c` · `capacitor` · `clojure` · `conda` · `coq` · `cpp` · `crystal` · `csharp` · `dart` · `deno` · `django` · `dlang` · `docker` · `dotnet` · `drizzle` · `electron` · `elixir` · `erlang` · `expo` · `express` · `fastapi` · `firebase` · `flask` · `flutter` · `flyio` · `fortran` · `fsharp` · `gatsby` · `github-actions` · `gleam` · `global` · `go` · `godot` · `gradle` · `graphql` · `groovy` · `haskell` · `ios` · `java` · `julia` · `jupyter` · `kotlin` · `kotlin-jvm` · `kubernetes` · `laravel` · `latex` · `lean` · `lerna` · `lua` · `matlab` · `maven` · `mongodb` · `mysql` · `nestjs` · `netlify` · `nextjs` · `nginx` · `nim` · `nix` · `node` · `nuxt` · `nx` · `objectivec` · `ocaml` · `packer` · `perl` · `php` · `platformio` · `pnpm` · `postgres` · `prisma` · `pulumi` · `purescript` · `python` · `pytorch` · `qwik` · `r` · `railway` · `react` · `react-native` · `redis` · `remix` · `ruby` · `rust` · `scala` · `shopify` · `solid` · `solidity` · `spring` · `sqlite` · `storybook` · `stripe` · `supabase` · `svelte` · `swift` · `symfony` · `t3` · `tamagui` · `tauri` · `terraform` · `testing` · `trpc` · `turborepo` · `unity` · `unreal` · `vagrant` · `vercel` · `vite` · `vscode-extension` · `vue` · `wails` · `wordpress` · `yarn` · `zig`
 
 > Don't see your stack? SIIG will attempt to fetch it automatically from [siig-rules](https://github.com/yv3000/siig-rules). You can also [contribute rules](https://github.com/yv3000/siig-rules/blob/main/CONTRIBUTING.md) for any stack not listed here.
 
@@ -325,7 +345,7 @@ Example: `siig --targets git,vercel,docker`
 
 ```
 siig (single binary, ~5.5MB)
-├── rules/db/         ← 110 JSON rule files, embedded at compile time
+├── rules/db/         ← 122 JSON rule files, embedded at compile time
 ├── scanner/          ← walks project dir (max depth 3), collects file/dir names
 ├── matcher/          ← merges rules per target; fetches unknown stacks online
 ├── fetcher/          ← fetches a single stack JSON from siig-rules on demand
@@ -345,7 +365,7 @@ User runs: siig
   scanner   →  walks project root (max depth 3, skips node_modules/.git)
       |            collects all file names and dir names found
       v
-  matcher   →  for each of 110 embedded stack rules:
+  matcher   →  for each of 122 embedded stack rules:
       |            checks if detect.files or detect.dirs exist in scan result
       |            if match → apply that stack's rules
       |            global rules always applied regardless of stack
@@ -385,7 +405,7 @@ Each stack is a single JSON file in `rules/db/`. Example — `node.json`:
 }
 ```
 
-All 110 JSON files are embedded into the binary at compile time using Go's `//go:embed` — **no external files needed at runtime for any of the 110 supported stacks.**
+All 122 JSON files are embedded into the binary at compile time using Go's `//go:embed` — **no external files needed at runtime for any of the 122 supported stacks.**
 
 ### Cache
 
@@ -395,7 +415,7 @@ Fetched rules are stored in `~/.siig/cache/` and reused for 7 days before re-fet
 
 ## Security
 
-- **Hybrid offline-first** — 110 stacks work with zero network. Network is only used as a fallback for stacks not in the embedded DB, and only for reading public JSON files from GitHub.
+- **Hybrid offline-first** — 122 stacks work with zero network. Network is only used as a fallback for stacks not in the embedded DB, and only for reading public JSON files from GitHub.
 - **Fetched rules are validated** — the response is capped at 1 MiB, parsed with unknown JSON fields rejected, and then checked: the rule must answer with the stack id that was requested, and no entry may be empty, oversized or contain a newline (which would let a remote file inject arbitrary lines into your ignore files). The same check applies when a rule is read back from the local cache.
 - **No telemetry** — no data collection of any kind.
 - **Read-only scan** — SIIG reads file and directory *names*. The only content it opens is root `package.json` (to see if `main`/`exports` mean a library) and existing ignore / `.vscode/settings.json` files it may update. Source, secrets, and `.env` values are never read.
@@ -468,14 +488,14 @@ No. SIIG only appends entries that aren't already present. Your existing content
 **Is it safe to run on an existing project?**
 Yes. SIIG never touches source code — only ignore files. Run `siig --dry-run` first if you want to preview exactly what would be added.
 
-**What if my stack isn't in the embedded 110?**
+**What if my stack isn't in the embedded 122?**
 SIIG automatically tries to fetch it from [siig-rules](https://github.com/yv3000/siig-rules) on demand. If found, it's cached locally for 7 days and applied — no action needed from you. If it doesn't exist there either, it's silently skipped. The request is built from the unrecognised file's name, so a project with `gleam.toml` asks for the `gleam` rule; a stack whose marker file is named differently (PureScript's `spago.dhall`) needs the rule to be embedded, which happens through the sync PR and the next release. You can also [contribute rules](https://github.com/yv3000/siig-rules/blob/main/CONTRIBUTING.md) for it.
 
 **Does SIIG read my `.env` files or source code?**
 No. Scanning uses file and directory names. It may read root `package.json` for library detection and the ignore / VS Code settings files it writes. `.env` and source are never read.
 
 **How do I use SIIG without internet?**
-Run `siig --offline`. This skips all network requests and uses only the 110 embedded stacks plus anything already in the local cache.
+Run `siig --offline`. This skips all network requests and uses only the 122 embedded stacks plus anything already in the local cache.
 
 **How do I force a fresh fetch and ignore the cache?**
 Run `siig --no-cache`. Cached rules are skipped for that run and every unknown stack is fetched fresh — nothing on disk is deleted. To actually remove the cached rules, run `siig --clear-cache`.

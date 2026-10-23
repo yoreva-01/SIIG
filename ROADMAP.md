@@ -48,10 +48,22 @@ smoke test, PR-based rule sync, Dependency Health 65 → refreshed deps + bot.
   negative-lookup for 404 stacks, `output` printer assertions on content rather
   than smoke calls.
 - **Branch protection + required checks** on `main` (repo setting, not a file).
-- **siig-rules gap**: the upstream `db/` holds the same 110 stacks that are
-  already embedded, so the online fallback can only ever 404. Making the
-  "unknown stack is fetched automatically" claim true means adding rules that
-  are *not* embedded — work in the siig-rules repo, not here.
+- **A release for the 12 new stacks.** They are merged into `main` but in no
+  published binary yet; the next tag ships 122 embedded rules.
+
+## Closed since the 63 scan
+
+- **The siig-rules gap is fixed.** Upstream held exactly the stacks already
+  embedded, so the on-demand fetch could only ever 404. Twelve stacks were added
+  to [siig-rules](https://github.com/yv3000/siig-rules) — Gleam, Nim, OCaml,
+  Crystal, Fortran, D, PureScript, Lean 4, Coq, LaTeX, PlatformIO, Solidity —
+  with a validator and CI there, and the loop was proven end to end: upstream
+  merge → SIIG sync opened PR #43 → CI → merged → 122 embedded rules.
+- **The sync never saw a new stack.** It compared with `git diff`, which ignores
+  untracked files — the exact shape of "a rule was added" — so it printed
+  "already up to date" and opened nothing. Fixed and verified by live dispatch.
+- **Two README claims made true:** fetched stacks are reported as
+  `<Name> (online)`, and `--offline` honours the cache.
 
 ## Released
 

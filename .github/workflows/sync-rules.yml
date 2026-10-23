@@ -2,11 +2,12 @@ name: Sync Rules from siig-rules
 
 on:
   schedule:
-    - cron: '0 2 * * 1'   # Every Monday at 2am UTC
-  workflow_dispatch:        # Manual trigger anytime from GitHub Actions tab
+    - cron: '0 2 * * 1' # Every Monday at 02:00 UTC
+  workflow_dispatch:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   sync:
@@ -14,47 +15,38 @@ jobs:
     steps:
       - name: Checkout SIIG
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.PAT_TOKEN }}
 
       - name: Clone siig-rules
-        run: |
-          git clone https://github.com/yv3000/siig-rules.git /tmp/siig-rules
+        run: git clone --depth 1 https://github.com/yv3000/siig-rules.git /tmp/siig-rules
 
       - name: Copy rules into SIIG
-        run: |
-          cp /tmp/siig-rules/db/*.json rules/db/
+        run: cp /tmp/siig-rules/db/*.json rules/db/
 
-      - name: Check for changes
-        id: changes
+      # The embedded DB ships inside every binary, so a sync is reviewed like
+      # any other change: branch + pull request, never a direct push or tag.
+      - name: Open a pull request if rules changed
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git diff --quiet rules/db/ && echo "changed=false" >> $GITHUB_OUTPUT || echo "changed=true" >> $GITHUB_OUTPUT
+          if git diff --quiet -- rules/db; then
+            echo "siig-rules is already up to date. Nothing to open."
+            exit 0
+          fi
 
-      - name: Bump version and commit
-        if: steps.changes.outputs.changed == 'true'
-        run: |
+          count=$(git diff --name-only -- rules/db | wc -l | tr -d ' ')
+          branch="bot/sync-rules-$(date -u +%Y%m%d)"
+
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git remote set-url origin https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/yv3000/SIIG.git
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add rules/db
+          git commit -m "fix(rules): sync ${count} stack rule file(s) from siig-rules"
+          git push -u origin "$branch"
 
-          # Get latest tag and bump patch version
-          LATEST=$(git describe --tags --abbrev=0 2>/dev/null || echo "v1.0.0")
-          MAJOR=$(echo $LATEST | cut -d. -f1)
-          MINOR=$(echo $LATEST | cut -d. -f2)
-          PATCH=$(echo $LATEST | cut -d. -f3)
-          NEW_PATCH=$((PATCH + 1))
-          NEW_TAG="${MAJOR}.${MINOR}.${NEW_PATCH}"
+          gh pr create \
+            --base main \
+            --head "$branch" \
+            --title "chore(rules): sync ${count} rule file(s) from siig-rules" \
+            --body "Automated weekly sync from [siig-rules](https://github.com/yv3000/siig-rules).
 
-          # Count how many new/changed files
-          CHANGED_COUNT=$(git diff --name-only rules/db/ | wc -l | tr -d ' ')
-
-          git add rules/db/
-          git commit -m "sync: update rules from siig-rules — ${CHANGED_COUNT} file(s) changed (${NEW_TAG})"
-          git tag $NEW_TAG
-          git push origin main
-          git push origin $NEW_TAG
-
-      - name: No changes
-        if: steps.changes.outputs.changed == 'false'
-        run: echo "siig-rules is already up to date. No new tag needed."
+          ${count} file(s) under \`rules/db/\` changed. CI must pass before merge — the embedded DB is compiled into every release binary."

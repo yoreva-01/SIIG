@@ -12,6 +12,9 @@ siig
 # Go build cache
 *.out
 
+# Coverage profile
+coverage.out
+
 # IDE
 .idea/
 .vscode/

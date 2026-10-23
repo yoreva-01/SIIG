@@ -72,6 +72,7 @@ func TestParseTargets(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "aliases", in: []string{"git", "vercelignore", "DOCKER", " npm ", "vscode"}, want: []Target{TargetGitignore, TargetVercelignore, TargetDockerignore, TargetNpmignore, TargetVSCode}},
+		{name: "repeats collapse in first-seen order", in: []string{"docker", "git", "gitignore", "DOCKER"}, want: []Target{TargetDockerignore, TargetGitignore}},
 		{name: "unknown", in: []string{"git", "nope"}, wantErr: true},
 		{name: "blanks skipped", in: []string{"", "git"}, want: []Target{TargetGitignore}},
 	}

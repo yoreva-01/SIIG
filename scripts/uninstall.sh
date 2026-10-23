@@ -4,23 +4,46 @@
 
 set -e
 
-INSTALL_DIR="/usr/local/bin"
 BINARY_NAME="siig"
-BINARY_PATH="${INSTALL_DIR}/${BINARY_NAME}"
 
-if [ ! -f "$BINARY_PATH" ]; then
-  echo "SIIG is not installed at ${BINARY_PATH}"
-  echo "Nothing to uninstall."
-  exit 0
+# install.sh picks the first writable directory already on PATH, so uninstall
+# has to search the same places instead of assuming /usr/local/bin.
+if [ -n "$INSTALL_DIR" ]; then
+  candidates="$INSTALL_DIR"
+else
+  candidates="$(echo "$PATH" | tr ':' ' ') $HOME/.siig/bin /usr/local/bin /opt/homebrew/bin $HOME/.local/bin"
 fi
 
-echo "→ Removing SIIG from ${BINARY_PATH}..."
+removed=0
+for dir in $candidates; do
+  [ -n "$dir" ] || continue
+  binary="$dir/$BINARY_NAME"
+  [ -f "$binary" ] || continue
 
-if [ -w "$INSTALL_DIR" ]; then
-  rm -f "$BINARY_PATH"
-else
-  echo "→ Requires sudo to remove from ${INSTALL_DIR}"
-  sudo rm -f "$BINARY_PATH"
+  echo "→ Removing ${binary}..."
+  if [ -w "$dir" ]; then
+    rm -f "$binary"
+  else
+    echo "→ Requires sudo to remove from ${dir}"
+    sudo rm -f "$binary"
+  fi
+  removed=1
+done
+
+if [ "$removed" -eq 0 ]; then
+  echo "SIIG binary not found in the searched directories."
+fi
+
+# The rules cache lives under the user's home regardless of where the binary went.
+if [ -d "$HOME/.siig" ]; then
+  echo "→ Removing cached rules from ${HOME}/.siig..."
+  rm -rf "$HOME/.siig"
+  removed=1
+fi
+
+if [ "$removed" -eq 0 ]; then
+  echo "Nothing to uninstall."
+  exit 0
 fi
 
 echo ""

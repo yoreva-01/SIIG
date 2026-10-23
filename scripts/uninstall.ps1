@@ -3,24 +3,15 @@
 
 $ErrorActionPreference = "Stop"
 
-$installDir = "$env:USERPROFILE\.siig\bin"
-$binaryName = "siig.exe"
-$binaryPath = Join-Path $installDir $binaryName
+$siigHome = Join-Path $env:USERPROFILE ".siig"
+$installDir = Join-Path $siigHome "bin"
+$binaryPath = Join-Path $installDir "siig.exe"
 
-if (-not (Test-Path $binaryPath)) {
-    Write-Host "SIIG is not installed at $binaryPath" -ForegroundColor Yellow
-    Write-Host "Nothing to uninstall."
-    exit 0
-}
-
-Write-Host "-> Removing SIIG..." -ForegroundColor Cyan
-
-# Remove binary
-Remove-Item $binaryPath -Force
-
-# Remove install directory if empty
-if ((Get-ChildItem $installDir -Force | Measure-Object).Count -eq 0) {
-    Remove-Item $installDir -Force
+if (Test-Path $binaryPath) {
+    Write-Host "-> Removing SIIG..." -ForegroundColor Cyan
+    Remove-Item $binaryPath -Force
+} else {
+    Write-Host "SIIG binary not found at $binaryPath" -ForegroundColor Yellow
 }
 
 # Remove from PATH
@@ -29,6 +20,12 @@ if ($userPath -like "*$installDir*") {
     Write-Host "-> Removing $installDir from PATH..." -ForegroundColor Cyan
     $newPath = ($userPath -split ";" | Where-Object { $_ -ne $installDir }) -join ";"
     [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
+}
+
+# ~/.siig also holds the fetched rule cache, so it goes as well
+if (Test-Path $siigHome) {
+    Write-Host "-> Removing cached rules from $siigHome..." -ForegroundColor Cyan
+    Remove-Item $siigHome -Recurse -Force
 }
 
 Write-Host ""

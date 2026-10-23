@@ -41,7 +41,7 @@ type StackRulesList struct {
 }
 
 // LoadAll reads every JSON file from the embedded rules/db/ directory
-// and returns a slice of StackRule. Caveman style — just read em all, no fancy stuff.
+// and returns a slice of StackRule.
 func LoadAll() ([]StackRule, error) {
 	var rules []StackRule
 
@@ -50,6 +50,7 @@ func LoadAll() ([]StackRule, error) {
 		return nil, fmt.Errorf("failed to read embedded rules dir: %w", err)
 	}
 
+	seen := make(map[string]bool, len(entries))
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -60,18 +61,32 @@ func LoadAll() ([]StackRule, error) {
 			return nil, fmt.Errorf("failed to read rule file %s: %w", entry.Name(), err)
 		}
 
-		var rule StackRule
-		if err := json.Unmarshal(data, &rule); err != nil {
-			return nil, fmt.Errorf("failed to parse rule file %s: %w", entry.Name(), err)
+		rule, err := decodeRule(entry.Name(), data, seen)
+		if err != nil {
+			return nil, err
 		}
-		if strings.TrimSpace(rule.ID) == "" {
-			return nil, fmt.Errorf("rule file %s: missing id", entry.Name())
-		}
-
 		rules = append(rules, rule)
 	}
 
 	return rules, nil
+}
+
+// decodeRule parses one rule file and rejects the mistakes that would silently
+// break detection: no id, or an id already claimed by another file.
+func decodeRule(name string, data []byte, seen map[string]bool) (StackRule, error) {
+	var rule StackRule
+	if err := json.Unmarshal(data, &rule); err != nil {
+		return StackRule{}, fmt.Errorf("failed to parse rule file %s: %w", name, err)
+	}
+	if strings.TrimSpace(rule.ID) == "" {
+		return StackRule{}, fmt.Errorf("rule file %s: missing id", name)
+	}
+	if seen[rule.ID] {
+		return StackRule{}, fmt.Errorf("rule file %s: duplicate id %q", name, rule.ID)
+	}
+	seen[rule.ID] = true
+
+	return rule, nil
 }
 
 // GetGlobal returns the global rule (detect == nil, always applied)

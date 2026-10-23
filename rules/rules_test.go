@@ -29,6 +29,28 @@ func TestLoadAll(t *testing.T) {
 	}
 }
 
+func TestDecodeRule(t *testing.T) {
+	seen := map[string]bool{"go": true}
+
+	if _, err := decodeRule("dup.json", []byte(`{"id":"go"}`), seen); err == nil {
+		t.Fatal("duplicate id should be rejected")
+	}
+	if _, err := decodeRule("blank.json", []byte(`{"id":"   "}`), seen); err == nil {
+		t.Fatal("missing id should be rejected")
+	}
+	if _, err := decodeRule("broken.json", []byte(`{"id":`), seen); err == nil {
+		t.Fatal("malformed json should be rejected")
+	}
+
+	rule, err := decodeRule("rust.json", []byte(`{"id":"rust","name":"Rust"}`), seen)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rule.ID != "rust" || !seen["rust"] {
+		t.Fatalf("rule %+v, seen %v", rule, seen)
+	}
+}
+
 func TestValidateStackID(t *testing.T) {
 	ok := []string{"go", "next-js", "node.js", "c_sharp"}
 	for _, id := range ok {

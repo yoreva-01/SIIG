@@ -79,7 +79,7 @@ irm https://raw.githubusercontent.com/yv3000/SIIG/main/scripts/uninstall.ps1 | i
 curl -fsSL https://raw.githubusercontent.com/yv3000/SIIG/main/scripts/uninstall.sh | sh
 ```
 
-Removes the binary and cleans up the PATH entry. Nothing else is touched — SIIG never modifies anything outside your project directory during normal use.
+Removes the binary, cleans up the PATH entry and deletes `~/.siig` (the fetched-rule cache). Nothing else is touched — SIIG never modifies anything outside your project directory during normal use.
 
 ---
 
@@ -118,10 +118,12 @@ $ siig --verbose
 ```bash
 siig                          # Auto-detect stack and populate ignore files
 siig --dry-run                # Preview what would be added — nothing written
+siig --check                  # Exit 1 if ignore files are missing entries (for CI)
 siig --verbose                # Show every rule applied, every entry added
 siig --targets git,docker     # Only populate specific targets
 siig --offline                # Skip network — use embedded rules and cache only
-siig --no-cache               # Force fresh fetch, ignore local cache
+siig --no-cache               # Ignore rules cached from earlier runs, fetch fresh
+siig --clear-cache            # Delete the locally cached remote rules
 siig --version                # Print version
 siig --help                   # Print help
 ```
@@ -323,12 +325,15 @@ Example: `siig --targets git,vercel,docker`
 
 ```
 siig (single binary, ~5.5MB)
-├── rules/db/   ← 110 JSON rule files, embedded at compile time
-├── scanner/    ← walks project dir (max depth 3), collects file/dir names
-├── matcher/    ← matches files against rule DB; fetches unknown stacks online
-├── fetcher/    ← fetches a single stack JSON from siig-rules on demand
-├── cache/      ← stores fetched rules in ~/.siig/cache/ for 7 days
-└── writer/     ← deduplicates against existing ignore files, appends only new entries
+├── rules/db/         ← 110 JSON rule files, embedded at compile time
+├── scanner/          ← walks project dir (max depth 3), collects file/dir names
+├── matcher/          ← merges rules per target; fetches unknown stacks online
+├── fetcher/          ← fetches a single stack JSON from siig-rules on demand
+├── cache/            ← stores fetched rules in ~/.siig/cache/ for 7 days
+├── writer/           ← dedupes against existing ignore files, appends new entries
+├── output/           ← CLI reporting (results, dry-run, verbose)
+├── internal/version/ ← version stamped at release time
+└── cmd/              ← cobra entry point
 ```
 
 ### The Flow
@@ -391,6 +396,7 @@ Fetched rules are stored in `~/.siig/cache/` and reused for 7 days before re-fet
 ## Security
 
 - **Hybrid offline-first** — 110 stacks work with zero network. Network is only used as a fallback for stacks not in the embedded DB, and only for reading public JSON files from GitHub.
+- **Fetched rules are validated** — the response is capped at 1 MiB, parsed with unknown JSON fields rejected, and then checked: the rule must answer with the stack id that was requested, and no entry may be empty, oversized or contain a newline (which would let a remote file inject arbitrary lines into your ignore files). The same check applies when a rule is read back from the local cache.
 - **No telemetry** — no data collection of any kind.
 - **Read-only scan** — SIIG reads file and directory *names*. The only content it opens is root `package.json` (to see if `main`/`exports` mean a library) and existing ignore / `.vscode/settings.json` files it may update. Source, secrets, and `.env` values are never read.
 - **Write-safe** — only appends to ignore files. Never modifies source code, never deletes anything.
@@ -423,7 +429,24 @@ go vet ./...
 go build -o siig .
 ```
 
-Tests live next to each package (`matcher/matcher_test.go`, `writer/writer_test.go`, `scanner/scanner_test.go`, `cache/cache_test.go`). CI runs `go test ./...`, `go vet ./...`, and golangci-lint on every push and pull request.
+Tests live next to each package (`matcher/matcher_test.go`, `writer/writer_test.go`, `scanner/scanner_test.go`, `cache/cache_test.go`) and use temp directories, so they never touch your real home or projects.
+
+CI runs on every push and pull request:
+
+| Job | What it enforces |
+|---|---|
+| `test` | `go test ./... -covermode=atomic` and `go vet ./...` on Go 1.21 **and** current stable; total coverage must stay at or above **80%** |
+| `lint` | golangci-lint v2 (standard linters + `gofmt`) |
+| `audit` | `govulncheck ./...` for called vulnerabilities |
+
+Reproduce the same checks locally:
+
+```bash
+go test ./... -covermode=atomic -coverprofile=coverage.out
+go tool cover -func=coverage.out | tail -1   # total must be >= 80%
+go vet ./...
+golangci-lint run ./...
+```
 
 Cross-compile for any platform:
 
@@ -455,10 +478,10 @@ No. Scanning uses file and directory names. It may read root `package.json` for 
 Run `siig --offline`. This skips all network requests and uses only the 110 embedded stacks plus anything already in the local cache.
 
 **How do I force a fresh fetch and ignore the cache?**
-Run `siig --no-cache`. This clears the local cache before running, so every unknown stack is re-fetched fresh from siig-rules.
+Run `siig --no-cache`. Cached rules are skipped for that run and every unknown stack is fetched fresh — nothing on disk is deleted. To actually remove the cached rules, run `siig --clear-cache`.
 
 **Can I run SIIG in CI?**
-Yes — `siig` exits with code 0 on success, non-zero on error. Use `siig --dry-run` in CI to verify ignore files are up to date without writing. Use `siig --offline` in CI if you don't want any outbound network calls.
+Yes — `siig` exits with code 0 on success, non-zero on error. Use `siig --check` to fail the job when the ignore files are missing entries (it writes nothing), and `siig --offline` if you don't want any outbound network calls.
 
 **How do I add a custom stack?**
 Open a PR to [siig-rules](https://github.com/yv3000/siig-rules) adding a JSON file to `db/` following the schema in [CONTRIBUTING.md](https://github.com/yv3000/siig-rules/blob/main/CONTRIBUTING.md).

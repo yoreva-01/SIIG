@@ -33,7 +33,7 @@ func TestFetchStack_valid(t *testing.T) {
 	var gotUA, gotPath string
 	withServer(t, func(w http.ResponseWriter, r *http.Request) {
 		gotUA, gotPath = r.Header.Get("User-Agent"), r.URL.Path
-		fmt.Fprint(w, `{"id":"gleam","name":"Gleam","rules":{"gitignore":["erl_crash.dump","_build/"]}}`)
+		_, _ = fmt.Fprint(w, `{"id":"gleam","name":"Gleam","rules":{"gitignore":["erl_crash.dump","_build/"]}}`)
 	})
 
 	rule, err := FetchStack("gleam")
@@ -89,7 +89,7 @@ func TestFetchStack_rejectsBadPayloads(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			body := tt.body
 			withServer(t, func(w http.ResponseWriter, r *http.Request) {
-				fmt.Fprint(w, body)
+				_, _ = fmt.Fprint(w, body)
 			})
 			_, err := FetchStack("gleam")
 			if err == nil {
@@ -105,7 +105,7 @@ func TestFetchStack_rejectsBadPayloads(t *testing.T) {
 func TestFetchStack_capsResponseSize(t *testing.T) {
 	huge := `{"id":"gleam","name":"G","rules":{"gitignore":["` + strings.Repeat("a", maxRuleBytes) + `"]}}`
 	withServer(t, func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, huge)
+		_, _ = fmt.Fprint(w, huge)
 	})
 
 	if _, err := FetchStack("gleam"); err == nil || !strings.Contains(err.Error(), "exceeds") {
@@ -116,7 +116,7 @@ func TestFetchStack_capsResponseSize(t *testing.T) {
 func TestFetchStack_timesOut(t *testing.T) {
 	withServer(t, func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(300 * time.Millisecond)
-		fmt.Fprint(w, `{"id":"gleam","name":"G"}`)
+		_, _ = fmt.Fprint(w, `{"id":"gleam","name":"G"}`)
 	})
 	timeout = 20 * time.Millisecond
 

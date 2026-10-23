@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/yv3000/siig/cache"
 	"github.com/yv3000/siig/internal/version"
 	"github.com/yv3000/siig/matcher"
 	"github.com/yv3000/siig/output"
@@ -15,11 +16,13 @@ import (
 )
 
 var (
-	dryRun  bool
-	targets string
-	verbose bool
-	offline bool
-	noCache bool
+	dryRun     bool
+	check      bool
+	targets    string
+	verbose    bool
+	offline    bool
+	noCache    bool
+	clearCache bool
 )
 
 // rootCmd is the base command — just run "siig" and it does the thing
@@ -38,10 +41,12 @@ Zero config. One command. No more leaked secrets.`,
 
 func init() {
 	rootCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show what would be added without writing")
+	rootCmd.Flags().BoolVar(&check, "check", false, "Fail (exit 1) if ignore files are missing entries, without writing")
 	rootCmd.Flags().StringVar(&targets, "targets", "", "Comma-separated targets to populate (git,vercel,docker,npm,vscode)")
 	rootCmd.Flags().BoolVar(&verbose, "verbose", false, "Print every file checked and rule applied")
 	rootCmd.Flags().BoolVar(&offline, "offline", false, "Skip all network requests, use embedded rules and cache only")
 	rootCmd.Flags().BoolVar(&noCache, "no-cache", false, "Ignore rules cached from earlier runs and fetch fresh ones")
+	rootCmd.Flags().BoolVar(&clearCache, "clear-cache", false, "Delete rules cached from earlier runs and exit")
 }
 
 // Execute runs the root command — called from main.go
@@ -51,13 +56,18 @@ func Execute() {
 	}
 }
 
-// runSiig is the main logic. Caveman flow:
-// 1. Load rules
-// 2. Scan project
-// 3. Match rules
-// 4. Write files
-// 5. Print what happened
+// runSiig loads the embedded rules, scans the working directory, merges the
+// matching rules into per-target entries, writes the applicable files and then
+// reports what happened.
 func runSiig(cmd *cobra.Command, args []string) error {
+	if clearCache {
+		if err := cache.Clear(); err != nil {
+			return fmt.Errorf("could not clear cached rules: %w", err)
+		}
+		fmt.Println("✓ Cached rules deleted")
+		return nil
+	}
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("cannot determine current directory: %w", err)
@@ -105,27 +115,35 @@ func runSiig(cmd *cobra.Command, args []string) error {
 		output.PrintVerbose(scanResult, matchResult)
 	}
 
-	// 5. write to target files
-	writeResults := writer.WriteAll(cwd, matchResult, dryRun)
+	// 5. write to target files (--check never writes)
+	noWrite := dryRun || check
+	writeResults := writer.WriteAll(cwd, matchResult, noWrite)
 
 	// 6. print results
-	if dryRun {
-		output.PrintDryRun(writeResults, matchResult)
-	} else {
-		// check if anything was actually written
-		anyWritten := false
-		for _, r := range writeResults {
-			if !r.Skipped && r.EntriesAdded > 0 {
-				anyWritten = true
-				break
-			}
+	switch {
+	case check:
+		output.PrintCheck(writeResults)
+		if missing := pendingEntries(writeResults); missing > 0 {
+			return fmt.Errorf("ignore files are out of date: %d entries missing (run `siig` to add them)", missing)
 		}
-
-		if anyWritten {
-			output.PrintResults(writeResults)
-		} else {
-			output.PrintNoChanges()
-		}
+		output.PrintNoChanges()
+	case noWrite:
+		output.PrintDryRun(writeResults)
+	case pendingEntries(writeResults) == 0:
+		output.PrintNoChanges()
+	default:
+		output.PrintResults(writeResults)
 	}
 	return nil
+}
+
+// pendingEntries counts entries that still have to be written.
+func pendingEntries(results []writer.WriteResult) int {
+	missing := 0
+	for _, r := range results {
+		if !r.Skipped {
+			missing += r.EntriesAdded
+		}
+	}
+	return missing
 }

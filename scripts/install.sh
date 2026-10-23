@@ -76,7 +76,9 @@ curl -fsSL "$DOWNLOAD_URL" -o "${TMP_DIR}/${BINARY_NAME}"
 
 # verify checksum
 echo "→ Verifying checksum..."
-EXPECTED=$(curl -fsSL "$CHECKSUMS_URL" | grep "$ASSET_NAME" | awk '{print $1}')
+# A missing checksums.txt or an unlisted asset must stay a warning: with set -e,
+# a failing pipeline in this assignment would abort the install outright.
+EXPECTED=$(curl -fsSL "$CHECKSUMS_URL" 2>/dev/null | awk -v name="$ASSET_NAME" '$2 == name { print $1 }') || EXPECTED=""
 if [ -n "$EXPECTED" ]; then
   if command -v sha256sum > /dev/null 2>&1; then
     ACTUAL=$(sha256sum "${TMP_DIR}/${BINARY_NAME}" | awk '{print $1}')

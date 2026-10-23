@@ -178,6 +178,9 @@ func TestWriteVSCodeSettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !strings.HasSuffix(string(raw), "}\n") {
+		t.Fatalf("settings.json should end with a newline:\n%s", raw)
+	}
 	var settings map[string]interface{}
 	if err := json.Unmarshal(raw, &settings); err != nil {
 		t.Fatal(err)

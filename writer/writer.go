@@ -33,8 +33,8 @@ var ignoreFiles = []struct {
 	{matcher.TargetNpmignore, ".npmignore"},
 }
 
-// WriteAll writes entries to all applicable target files.
-// Caveman: read existing, figure out what's new, slap it on the end.
+// WriteAll writes entries to all applicable target files. Each file is read
+// first so only entries it does not already contain get appended.
 func WriteAll(projectRoot string, matchResult *matcher.MatchResult, dryRun bool) []WriteResult {
 	var results []WriteResult
 
@@ -125,11 +125,18 @@ func writeIgnoreFile(filePath string, entries []string, target matcher.Target, d
 		result.SkipReason = fmt.Sprintf("failed to open file: %v", err)
 		return result
 	}
-	defer f.Close()
 
 	if _, err := f.WriteString(ignoreBlock(newEntries, existing)); err != nil {
+		_ = f.Close()
 		result.Skipped = true
 		result.SkipReason = fmt.Sprintf("failed to write: %v", err)
+		return result
+	}
+
+	// A failed close can lose the appended block, so it is not ignorable here.
+	if err := f.Close(); err != nil {
+		result.Skipped = true
+		result.SkipReason = fmt.Sprintf("failed to close: %v", err)
 		return result
 	}
 
@@ -269,6 +276,7 @@ func writeVSCodeSettings(filePath string, excludes map[string]bool, dryRun bool)
 		result.SkipReason = fmt.Sprintf("failed to marshal JSON: %v", err)
 		return result
 	}
+	output = append(output, '\n')
 
 	// ensure .vscode directory exists
 	dir := filepath.Dir(filePath)

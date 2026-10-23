@@ -65,8 +65,8 @@ const maxOnlineFetches = 10
 // maxConcurrentFetches bounds parallel outbound requests.
 const maxConcurrentFetches = 5
 
-// Match takes scan results and all rules, produces a consolidated MatchResult.
-// Caveman logic: just loop through everything, merge it all together.
+// Match takes scan results and all rules, produces a consolidated MatchResult
+// by merging the global rule and every detected stack.
 // If opts.Offline is false, also tries fetching unknown stacks from siig-rules.
 func Match(scanResult *scanner.ScanResult, allRules []StackRule, allowedTargets []Target, opts Options) *MatchResult {
 	result := &MatchResult{
@@ -177,8 +177,17 @@ func dedupe(items []string) []string {
 }
 
 // ParseTargets converts user-provided target strings to Target values.
+// Repeated names collapse into one entry, keeping the order they first appeared.
 func ParseTargets(targets []string) ([]Target, error) {
 	var result []Target
+	seen := make(map[Target]bool, len(targets))
+	add := func(target Target) {
+		if !seen[target] {
+			seen[target] = true
+			result = append(result, target)
+		}
+	}
+
 	for _, raw := range targets {
 		t := strings.TrimSpace(strings.ToLower(raw))
 		if t == "" {
@@ -186,15 +195,15 @@ func ParseTargets(targets []string) ([]Target, error) {
 		}
 		switch t {
 		case "git", "gitignore":
-			result = append(result, TargetGitignore)
+			add(TargetGitignore)
 		case "vercel", "vercelignore":
-			result = append(result, TargetVercelignore)
+			add(TargetVercelignore)
 		case "docker", "dockerignore":
-			result = append(result, TargetDockerignore)
+			add(TargetDockerignore)
 		case "npm", "npmignore":
-			result = append(result, TargetNpmignore)
+			add(TargetNpmignore)
 		case "vscode":
-			result = append(result, TargetVSCode)
+			add(TargetVSCode)
 		default:
 			return nil, fmt.Errorf("unknown target %q (want git, vercel, docker, npm, vscode)", raw)
 		}
@@ -213,8 +222,7 @@ var genericNames = map[string]bool{
 }
 
 // buildCandidates extracts probable stack IDs from the project root that did
-// not match any embedded rule. Caveman: take filename without extension,
-// lowercase it. The result is sorted so a run is reproducible.
+// not match any embedded rule: the lowercased file name without its extension.
 func buildCandidates(root string, scanResult *scanner.ScanResult, allRules []StackRule) []string {
 	// collect all detect files/dirs from embedded rules to know what's "matched"
 	matchedFiles := make(map[string]bool)

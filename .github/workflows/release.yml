@@ -4,9 +4,20 @@ on:
   push:
     tags:
       - "v*.*.*"
+  # Manual run builds and smoke-tests every platform without publishing a
+  # release, so the pipeline can be verified without cutting a tag.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Tag name to stamp the binaries with (blank = use the ref, publish only on tag pushes)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
 
 jobs:
   release:
@@ -18,44 +29,78 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.21"
+          go-version: stable
+
+      - name: Resolve version
+        id: tag
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ -n "$INPUT_VERSION" ]; then
+            echo "VERSION=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
+          else
+            echo "VERSION=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Test
-        run: go test ./...
+        run: go test ./... -covermode=atomic -coverprofile=coverage.out
 
-      - name: Get tag name
-        id: tag
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+      - name: Coverage gate
+        env:
+          MIN_COVERAGE: "80"
+        run: |
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ { gsub("%", "", $3); print $3 }')
+          echo "total coverage ${total}% (gate ${MIN_COVERAGE}%)"
+          awk -v got="$total" -v want="$MIN_COVERAGE" 'BEGIN { exit (got + 0 < want + 0) }'
+
+      - name: Vet
+        run: go vet ./...
 
       - name: Cross-compile binaries
+        env:
+          VERSION: ${{ steps.tag.outputs.VERSION }}
+          VERSION_PKG: github.com/yv3000/siig/internal/version
         run: |
           mkdir -p dist
+          for target in windows/amd64 windows/arm64 darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
+            os=${target%/*}
+            arch=${target#*/}
+            ext=""
+            if [ "$os" = "windows" ]; then ext=".exe"; fi
+            GOOS=$os GOARCH=$arch go build -trimpath \
+              -ldflags "-s -w -X ${VERSION_PKG}.Version=${VERSION}" \
+              -o "dist/siig-${os}-${arch}${ext}" .
+          done
+          ls -l dist
 
-          # windows/amd64
-          GOOS=windows GOARCH=amd64 go build -o dist/siig-windows-amd64.exe .
+      - name: Smoke test the linux binary
+        env:
+          VERSION: ${{ steps.tag.outputs.VERSION }}
+        run: |
+          bin="$GITHUB_WORKSPACE/dist/siig-linux-amd64"
+          "$bin" --version | grep -F "$VERSION"
 
-          # darwin/amd64
-          GOOS=darwin GOARCH=amd64 go build -o dist/siig-darwin-amd64 .
+          work=$(mktemp -d)
+          printf 'module example\n' > "$work/go.mod"
 
-          # darwin/arm64
-          GOOS=darwin GOARCH=arm64 go build -o dist/siig-darwin-arm64 .
+          if (cd "$work" && "$bin" --offline --check > /dev/null); then
+            echo "--check must fail while ignore entries are missing"
+            exit 1
+          fi
 
-          # linux/amd64
-          GOOS=linux GOARCH=amd64 go build -o dist/siig-linux-amd64 .
-
-          # windows/arm64
-          GOOS=windows GOARCH=arm64 go build -o dist/siig-windows-arm64.exe .
-
-          # linux/arm64
-          GOOS=linux GOARCH=arm64 go build -o dist/siig-linux-arm64 .
+          (cd "$work" && "$bin" --offline > /dev/null)
+          test -f "$work/.gitignore"
+          (cd "$work" && "$bin" --offline --check > /dev/null)
+          echo "release binaries verified"
 
       - name: Generate checksums
         run: |
           cd dist
-          sha256sum * > checksums.txt
+          sha256sum -- * > checksums.txt
           cat checksums.txt
 
       - name: Create GitHub Release
+        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
           name: ${{ steps.tag.outputs.VERSION }}

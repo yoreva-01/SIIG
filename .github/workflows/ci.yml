@@ -8,26 +8,71 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go-version: ["1.21", "stable"]
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.21"
+          go-version: ${{ matrix.go-version }}
+
       - name: Test
-        run: go test ./...
+        run: go test ./... -covermode=atomic -coverprofile=coverage.out
+
       - name: Vet
         run: go vet ./...
+
+      - name: Coverage gate
+        if: matrix.go-version == 'stable'
+        env:
+          MIN_COVERAGE: "80"
+        run: |
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ { gsub("%", "", $3); print $3 }')
+          echo "total coverage ${total}% (gate ${MIN_COVERAGE}%)"
+          awk -v got="$total" -v want="$MIN_COVERAGE" 'BEGIN { exit (got + 0 < want + 0) }'
+
+      - name: Upload coverage profile
+        if: matrix.go-version == 'stable'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
 
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.21"
-      - uses: golangci/golangci-lint-action@v6
+          go-version: stable
+
+      - uses: golangci/golangci-lint-action@v7
         with:
-          version: v1.61.0
+          version: v2.15.0
+
+  # stdlib advisories are fixed by the toolchain itself, so this job runs on the
+  # current Go release; auditing an old pinned Go would only report noise.
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...

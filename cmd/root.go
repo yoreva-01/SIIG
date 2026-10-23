@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/yv3000/siig/cache"
 	"github.com/yv3000/siig/internal/version"
 	"github.com/yv3000/siig/matcher"
 	"github.com/yv3000/siig/output"
@@ -42,7 +41,7 @@ func init() {
 	rootCmd.Flags().StringVar(&targets, "targets", "", "Comma-separated targets to populate (git,vercel,docker,npm,vscode)")
 	rootCmd.Flags().BoolVar(&verbose, "verbose", false, "Print every file checked and rule applied")
 	rootCmd.Flags().BoolVar(&offline, "offline", false, "Skip all network requests, use embedded rules and cache only")
-	rootCmd.Flags().BoolVar(&noCache, "no-cache", false, "Force fresh fetch, ignore local cache")
+	rootCmd.Flags().BoolVar(&noCache, "no-cache", false, "Ignore rules cached from earlier runs and fetch fresh ones")
 }
 
 // Execute runs the root command — called from main.go
@@ -94,15 +93,12 @@ func runSiig(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// clear cache if --no-cache flag is set
-	if noCache {
-		if err := cache.Clear(); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: could not clear cache: %v\n", err)
-		}
-	}
-
 	// 4. match detected stacks against rules (with online fetch if not offline)
-	matchResult := matcher.Match(scanResult, allRules, allowedTargets, offline)
+	matchResult := matcher.Match(scanResult, allRules, allowedTargets, matcher.Options{
+		ProjectRoot: cwd,
+		Offline:     offline,
+		UseCache:    !noCache,
+	})
 
 	// verbose output
 	if verbose {

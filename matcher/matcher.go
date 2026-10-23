@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -45,10 +46,29 @@ type MatchResult struct {
 	DetectedNames []string
 }
 
+// Options controls one Match call.
+type Options struct {
+	// ProjectRoot is the directory being populated.
+	ProjectRoot string
+	// Offline skips every network request.
+	Offline bool
+	// UseCache is false when cached rules must be ignored for this run.
+	UseCache bool
+}
+
+// fetchStack is the remote lookup for unknown stacks; tests replace it.
+var fetchStack = fetcher.FetchStack
+
+// maxOnlineFetches bounds how many unrecognised stacks a single run asks about.
+const maxOnlineFetches = 10
+
+// maxConcurrentFetches bounds parallel outbound requests.
+const maxConcurrentFetches = 5
+
 // Match takes scan results and all rules, produces a consolidated MatchResult.
 // Caveman logic: just loop through everything, merge it all together.
-// If offline is false, also tries fetching unknown stacks from siig-rules.
-func Match(scanResult *scanner.ScanResult, allRules []StackRule, allowedTargets []Target, offline bool) *MatchResult {
+// If opts.Offline is false, also tries fetching unknown stacks from siig-rules.
+func Match(scanResult *scanner.ScanResult, allRules []StackRule, allowedTargets []Target, opts Options) *MatchResult {
 	result := &MatchResult{
 		Entries:           make(map[Target][]string),
 		VSCodeExclude:     make(map[string]bool),
@@ -85,10 +105,13 @@ func Match(scanResult *scanner.ScanResult, allRules []StackRule, allowedTargets 
 	}
 
 	// online fetch: try to find rules for unknown stacks from siig-rules
-	if !offline {
-		candidates := buildCandidates(scanResult, allRules)
+	if !opts.Offline {
+		candidates := buildCandidates(opts.ProjectRoot, scanResult, allRules)
+		if len(candidates) > maxOnlineFetches {
+			candidates = candidates[:maxOnlineFetches]
+		}
 		if len(candidates) > 0 {
-			fetchAndMerge(result, candidates)
+			fetchAndMerge(result, candidates, opts.UseCache)
 		}
 	}
 
@@ -189,9 +212,10 @@ var genericNames = map[string]bool{
 	"changelog": true, "contributing": true, "gitignore": true,
 }
 
-// buildCandidates extracts probable stack IDs from scan results that didn't
-// match any embedded rule. Caveman: take filename without extension, lowercase it.
-func buildCandidates(scanResult *scanner.ScanResult, allRules []StackRule) []string {
+// buildCandidates extracts probable stack IDs from the project root that did
+// not match any embedded rule. Caveman: take filename without extension,
+// lowercase it. The result is sorted so a run is reproducible.
+func buildCandidates(root string, scanResult *scanner.ScanResult, allRules []StackRule) []string {
 	// collect all detect files/dirs from embedded rules to know what's "matched"
 	matchedFiles := make(map[string]bool)
 	matchedDirs := make(map[string]bool)
@@ -213,16 +237,10 @@ func buildCandidates(scanResult *scanner.ScanResult, allRules []StackRule) []str
 		detectedIDs[s.Rule.ID] = true
 	}
 
-	// scan all files in the project root for candidate IDs
-	// we re-read just the top-level to get candidate names
+	// scan the project root for candidate IDs
 	candidates := make(map[string]bool)
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		return nil
-	}
-
-	entries, err := os.ReadDir(cwd)
+	entries, err := os.ReadDir(root)
 	if err != nil {
 		return nil
 	}
@@ -265,29 +283,39 @@ func buildCandidates(scanResult *scanner.ScanResult, allRules []StackRule) []str
 		candidates[candidate] = true
 	}
 
-	// convert to slice
+	// convert to slice, ordered
 	result := make([]string, 0, len(candidates))
 	for c := range candidates {
 		result = append(result, c)
 	}
+	sort.Strings(result)
 	return result
 }
 
-// fetchAndMerge fetches rules for candidate stack IDs concurrently and merges them
-// into the result. Max 5 concurrent fetches.
-func fetchAndMerge(result *MatchResult, candidates []string) {
-	const maxConcurrent = 5
+// fetchAndMerge resolves rules for candidate stack IDs concurrently and merges
+// them into the result, in candidate order so output does not depend on which
+// request finished first.
+func fetchAndMerge(result *MatchResult, candidates []string, useCache bool) {
+	resolved := fetchConcurrently(candidates, useCache)
 
-	type fetchResult struct {
-		rule *rules.StackRule
-		id   string
+	for _, id := range candidates {
+		rule := resolved[id]
+		if rule == nil {
+			continue
+		}
+		result.DetectedNames = append(result.DetectedNames, rule.Name+" (online)")
+		mergeRuleEntries(result, rule)
 	}
+}
 
+// fetchConcurrently looks each candidate up in the cache and, when missing,
+// online. At most maxConcurrentFetches requests are in flight.
+func fetchConcurrently(candidates []string, useCache bool) map[string]*rules.StackRule {
 	var (
-		mu      sync.Mutex
-		wg      sync.WaitGroup
-		sem     = make(chan struct{}, maxConcurrent)
-		fetched []fetchResult
+		mu       sync.Mutex
+		wg       sync.WaitGroup
+		sem      = make(chan struct{}, maxConcurrentFetches)
+		resolved = make(map[string]*rules.StackRule, len(candidates))
 	)
 
 	for _, candidate := range candidates {
@@ -298,47 +326,48 @@ func fetchAndMerge(result *MatchResult, candidates []string) {
 			defer wg.Done()
 			defer func() { <-sem }() // release semaphore slot
 
-			// try cache first
-			rule, err := cache.Get(stackID)
+			rule, err := resolveStack(stackID, useCache)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "cache error for %s: %v\n", stackID, err)
-			}
-
-			if rule != nil {
-				mu.Lock()
-				fetched = append(fetched, fetchResult{rule: rule, id: stackID})
-				mu.Unlock()
-				return
-			}
-
-			// cache miss — fetch from network
-			rule, err = fetcher.FetchStack(stackID)
-			if err != nil {
-				// network error — silently skip
-				return
+				return // network error — silently skip
 			}
 			if rule == nil {
-				// 404 — stack doesn't exist in siig-rules
-				return
-			}
-
-			// save to cache (best effort)
-			if cacheErr := cache.Set(stackID, rule); cacheErr != nil {
-				fmt.Fprintf(os.Stderr, "cache write error for %s: %v\n", stackID, cacheErr)
+				return // 404 — stack doesn't exist in siig-rules
 			}
 
 			mu.Lock()
-			fetched = append(fetched, fetchResult{rule: rule, id: stackID})
+			resolved[stackID] = rule
 			mu.Unlock()
 		}(candidate)
 	}
 
 	wg.Wait()
+	return resolved
+}
 
-	// merge fetched rules into result
-	for _, fr := range fetched {
-		displayName := fr.rule.Name + " (online)"
-		result.DetectedNames = append(result.DetectedNames, displayName)
-		mergeRuleEntries(result, fr.rule)
+// resolveStack returns the rule for a stack id from cache or network.
+func resolveStack(stackID string, useCache bool) (*rules.StackRule, error) {
+	if useCache {
+		rule, err := cache.Get(stackID)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "cache error for %s: %v\n", stackID, err)
+		} else if rule != nil {
+			return rule, nil
+		}
 	}
+
+	rule, err := fetchStack(stackID)
+	if err != nil {
+		return nil, err
+	}
+	if rule == nil {
+		return nil, nil
+	}
+
+	if useCache {
+		if cacheErr := cache.Set(stackID, rule); cacheErr != nil {
+			fmt.Fprintf(os.Stderr, "cache write error for %s: %v\n", stackID, cacheErr)
+		}
+	}
+
+	return rule, nil
 }

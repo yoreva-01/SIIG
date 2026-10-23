@@ -125,11 +125,18 @@ func writeIgnoreFile(filePath string, entries []string, target matcher.Target, d
 		result.SkipReason = fmt.Sprintf("failed to open file: %v", err)
 		return result
 	}
-	defer f.Close()
 
 	if _, err := f.WriteString(ignoreBlock(newEntries, existing)); err != nil {
+		_ = f.Close()
 		result.Skipped = true
 		result.SkipReason = fmt.Sprintf("failed to write: %v", err)
+		return result
+	}
+
+	// A failed close can lose the appended block, so it is not ignorable here.
+	if err := f.Close(); err != nil {
+		result.Skipped = true
+		result.SkipReason = fmt.Sprintf("failed to close: %v", err)
 		return result
 	}
 

@@ -46,7 +46,7 @@ func FetchStack(stackID string) (*rules.StackRule, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fetch failed for %s: %w", stackID, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// 404 means the stack doesn't exist in siig-rules — not an error
 	if resp.StatusCode == http.StatusNotFound {

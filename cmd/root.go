@@ -17,6 +17,7 @@ import (
 
 var (
 	dryRun     bool
+	check      bool
 	targets    string
 	verbose    bool
 	offline    bool
@@ -40,6 +41,7 @@ Zero config. One command. No more leaked secrets.`,
 
 func init() {
 	rootCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show what would be added without writing")
+	rootCmd.Flags().BoolVar(&check, "check", false, "Fail (exit 1) if ignore files are missing entries, without writing")
 	rootCmd.Flags().StringVar(&targets, "targets", "", "Comma-separated targets to populate (git,vercel,docker,npm,vscode)")
 	rootCmd.Flags().BoolVar(&verbose, "verbose", false, "Print every file checked and rule applied")
 	rootCmd.Flags().BoolVar(&offline, "offline", false, "Skip all network requests, use embedded rules and cache only")
@@ -116,27 +118,35 @@ func runSiig(cmd *cobra.Command, args []string) error {
 		output.PrintVerbose(scanResult, matchResult)
 	}
 
-	// 5. write to target files
-	writeResults := writer.WriteAll(cwd, matchResult, dryRun)
+	// 5. write to target files (--check never writes)
+	noWrite := dryRun || check
+	writeResults := writer.WriteAll(cwd, matchResult, noWrite)
 
 	// 6. print results
-	if dryRun {
+	switch {
+	case check:
 		output.PrintDryRun(writeResults, matchResult)
-	} else {
-		// check if anything was actually written
-		anyWritten := false
-		for _, r := range writeResults {
-			if !r.Skipped && r.EntriesAdded > 0 {
-				anyWritten = true
-				break
-			}
+		if missing := pendingEntries(writeResults); missing > 0 {
+			return fmt.Errorf("ignore files are out of date: %d entries missing (run `siig` to add them)", missing)
 		}
-
-		if anyWritten {
-			output.PrintResults(writeResults)
-		} else {
-			output.PrintNoChanges()
-		}
+		output.PrintNoChanges()
+	case noWrite:
+		output.PrintDryRun(writeResults, matchResult)
+	case pendingEntries(writeResults) == 0:
+		output.PrintNoChanges()
+	default:
+		output.PrintResults(writeResults)
 	}
 	return nil
+}
+
+// pendingEntries counts entries that still have to be written.
+func pendingEntries(results []writer.WriteResult) int {
+	missing := 0
+	for _, r := range results {
+		if !r.Skipped {
+			missing += r.EntriesAdded
+		}
+	}
+	return missing
 }

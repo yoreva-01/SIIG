@@ -10,14 +10,17 @@ import (
 	"github.com/yv3000/siig/rules"
 )
 
-// resetFlags clears the package-level flag vars after a test so one case cannot
-// leak its flags into the next.
+// resetFlags clears the package-level flag vars before a test and again afterwards,
+// so cases neither inherit nor leak flags.
 func resetFlags(t *testing.T) {
 	t.Helper()
-	t.Cleanup(func() {
-		dryRun, targets, verbose = false, "", false
+
+	clear := func() {
+		dryRun, check, targets, verbose = false, false, "", false
 		offline, noCache, clearCache = false, false, false
-	})
+	}
+	clear()
+	t.Cleanup(clear)
 }
 
 // isolateHome points the cache at a throwaway directory.
@@ -101,6 +104,36 @@ func TestRunSiig_noCacheKeepsCacheOnDisk(t *testing.T) {
 	}
 	if !cache.IsCached("gleam") {
 		t.Fatal("--no-cache should ignore the cache, not delete it")
+	}
+}
+
+func TestRunSiig_checkFailsUntilIgnoreFilesAreCurrent(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	chdir(t, dir)
+	isolateHome(t)
+
+	resetFlags(t)
+	offline, check = true, true
+	if err := runSiig(rootCmd, nil); err == nil {
+		t.Fatal("--check should fail while entries are missing")
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".gitignore")); err == nil {
+		t.Fatal("--check must not write")
+	}
+
+	resetFlags(t)
+	offline = true
+	if err := runSiig(rootCmd, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	resetFlags(t)
+	offline, check = true, true
+	if err := runSiig(rootCmd, nil); err != nil {
+		t.Fatalf("--check should pass once ignore files are current: %v", err)
 	}
 }
 

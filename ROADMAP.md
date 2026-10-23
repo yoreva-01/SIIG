@@ -48,9 +48,16 @@ smoke test, PR-based rule sync, Dependency Health 65 → refreshed deps + bot.
   negative-lookup for 404 stacks, `output` printer assertions on content rather
   than smoke calls.
 - **Branch protection + required checks** on `main` (repo setting, not a file).
-- **Release cadence**: cut `v2.0.1` once this batch is merged so the release
-  workflow publishes a stamped binary and the tag history stops being
-  single-author-only in one spot.
+- **siig-rules gap**: the upstream `db/` holds the same 110 stacks that are
+  already embedded, so the online fallback can only ever 404. Making the
+  "unknown stack is fetched automatically" claim true means adding rules that
+  are *not* embedded — work in the siig-rules repo, not here.
+
+## Released
+
+- **v2.0.1 (2026-10-23)** — first release built by the gated workflow: six
+  checksummed binaries, version stamped from the tag, and the built linux
+  binary smoke-tested before publish.
 
 ## Will not get you to 85
 

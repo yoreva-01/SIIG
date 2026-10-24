@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/yv3000/siig/cache"
 	"github.com/yv3000/siig/rules"
@@ -380,5 +381,82 @@ func TestResolveStack_propagatesFetchError(t *testing.T) {
 	got, err := resolveStack("gleam", Options{})
 	if err == nil || got != nil {
 		t.Fatalf("expected error, got %+v %v", got, err)
+	}
+}
+
+// TestFetchConcurrently_boundsPeakInFlight pins the semaphore: enough slow
+// lookups to saturate the pool, and a counter for how many overlapped.
+func TestFetchConcurrently_boundsPeakInFlight(t *testing.T) {
+	var (
+		mu    sync.Mutex
+		live  int
+		peak  int
+		total = maxConcurrentFetches*2 + 2
+	)
+	original := fetchStack
+	fetchStack = func(id string) (*rules.StackRule, error) {
+		mu.Lock()
+		live++
+		if live > peak {
+			peak = live
+		}
+		mu.Unlock()
+
+		time.Sleep(20 * time.Millisecond)
+
+		mu.Lock()
+		live--
+		mu.Unlock()
+		return &rules.StackRule{ID: id, Name: upperFirst(id)}, nil
+	}
+	t.Cleanup(func() { fetchStack = original })
+
+	candidates := make([]string, total)
+	for i := range candidates {
+		candidates[i] = fmt.Sprintf("stack%02d", i)
+	}
+
+	resolved := fetchConcurrently(candidates, Options{})
+	if len(resolved) != total {
+		t.Fatalf("resolved %d of %d", len(resolved), total)
+	}
+	if peak > maxConcurrentFetches {
+		t.Fatalf("peak in flight was %d, want at most %d", peak, maxConcurrentFetches)
+	}
+	if peak < 2 {
+		t.Fatalf("lookups never overlapped (peak %d), so the pool is untested", peak)
+	}
+}
+
+func TestFetchConcurrently_mergesWhatSucceeded(t *testing.T) {
+	stubFetch(t, func(id string) (*rules.StackRule, error) {
+		switch id {
+		case "broken":
+			return nil, errors.New("network down")
+		case "missing":
+			return nil, nil // 404
+		default:
+			return &rules.StackRule{ID: id, Name: "Good"}, nil
+		}
+	})
+
+	var result MatchResult
+	fetchAndMerge(&result, []string{"broken", "good", "missing"}, Options{})
+
+	if !reflect.DeepEqual(result.OnlineNames, []string{"Good"}) {
+		t.Fatalf("only the successful lookup should merge: %v", result.OnlineNames)
+	}
+}
+
+func TestFetchConcurrently_noCandidates(t *testing.T) {
+	calls := stubFetch(t, func(id string) (*rules.StackRule, error) {
+		return nil, errors.New("must not be called")
+	})
+
+	if got := fetchConcurrently(nil, Options{}); len(got) != 0 {
+		t.Fatalf("expected no results, got %v", got)
+	}
+	if len(*calls) != 0 {
+		t.Fatalf("empty candidate list triggered %v lookups", *calls)
 	}
 }

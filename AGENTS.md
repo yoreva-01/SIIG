@@ -10,6 +10,7 @@ SIIG is a **single-binary Go CLI**. Treat it as a CLI, not a service.
 - **No Docker. No Kubernetes. No extra infra.** No Dockerfile, compose, helm, or container tooling.
 - Do not add dependencies for things the stdlib or existing modules (`cobra`, `fatih/color`) already cover.
 - Do not add telemetry, config frameworks, or a logging stack. CLI errors go to stderr; cobra `RunE` returns errors.
+- Diagnostics (things the user cannot see happening: an unreadable path, a cache write that failed) go through `internal/log` — a thin `log/slog` wrapper writing WARN/ERROR to stderr, JSON when `--verbose`. It has no levels to configure, no sinks, no file output; keep it that way. Human-facing output stays in `output/` on stdout and must not become log records.
 
 ## Layout
 
@@ -23,6 +24,7 @@ rules/    embedded JSON DB + validation of rules from outside the binary
 cmd/      cobra entry
 output/   stdout
 internal/version/  release version, stamped with -ldflags
+internal/log/  stderr diagnostics (slog); not a logging framework
 ```
 
 Allowed despite “no infra”: GitHub Actions workflows, Dependabot config, lint

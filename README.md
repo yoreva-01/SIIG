@@ -128,6 +128,10 @@ siig --version                # Print version
 siig --help                   # Print help
 ```
 
+### Diagnostics
+
+Things the user cannot see happening — a path that could not be read, a rule cache entry that failed to write — are reported on **stderr** and never written into an ignore file. `--verbose` emits them as JSON records so a script can read them; the summary on stdout stays human-readable.
+
 ### Targets
 
 | Flag value | File written |

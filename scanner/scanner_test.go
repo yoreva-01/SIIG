@@ -1,13 +1,16 @@
 package scanner
 
 import (
+	"bytes"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"testing/fstest"
 
+	diag "github.com/yv3000/siig/internal/log"
 	"github.com/yv3000/siig/internal/version"
 	"github.com/yv3000/siig/rules"
 )
@@ -141,6 +144,10 @@ func TestScanFS_surfacesUnreadablePaths(t *testing.T) {
 	mem := mapFS(map[string]string{"go.mod": "module example", "blocked/inner.txt": "x"})
 	broken := failingFS{MapFS: mem, blocked: "blocked"}
 
+	records := &bytes.Buffer{}
+	diag.SetWriter(records)
+	t.Cleanup(func() { diag.SetWriter(os.Stderr) })
+
 	got, err := scanFS(broken, []rules.StackRule{{
 		ID:     "go",
 		Detect: &rules.DetectConfig{Files: []string{"go.mod"}},
@@ -153,6 +160,13 @@ func TestScanFS_surfacesUnreadablePaths(t *testing.T) {
 	}
 	if !ids(got)["go"] {
 		t.Fatalf("readable parts should still be scanned: %#v", ids(got))
+	}
+
+	line := records.String()
+	for _, want := range []string{"level=WARN", "msg=\"path could not be read\"", "path=blocked"} {
+		if !strings.Contains(line, want) {
+			t.Fatalf("diagnostic record missing %q:\n%s", want, line)
+		}
 	}
 }
 

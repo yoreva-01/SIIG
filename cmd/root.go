@@ -133,11 +133,17 @@ func runSiig(cmd *cobra.Command, args []string) error {
 		if missing := pendingEntries(writeResults); missing > 0 {
 			return fmt.Errorf("ignore files are out of date: %d entries missing (run `siig` to add them)", missing)
 		}
-		output.PrintNoChanges()
+		if hasApplicableTargets(matchResult) {
+			output.PrintNoChanges()
+		}
 	case noWrite:
 		output.PrintDryRun(writeResults)
 	case pendingEntries(writeResults) == 0:
-		output.PrintNoChanges()
+		if hasApplicableTargets(matchResult) {
+			output.PrintNoChanges()
+		} else {
+			output.PrintResults(writeResults)
+		}
 	default:
 		output.PrintResults(writeResults)
 	}
@@ -153,4 +159,13 @@ func pendingEntries(results []writer.WriteResult) int {
 		}
 	}
 	return missing
+}
+
+func hasApplicableTargets(result *matcher.MatchResult) bool {
+	for _, applicable := range result.ApplicableTargets {
+		if applicable {
+			return true
+		}
+	}
+	return false
 }

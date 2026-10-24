@@ -10,6 +10,7 @@ import (
 
 	"github.com/yv3000/siig/cache"
 	"github.com/yv3000/siig/fetcher"
+	"github.com/yv3000/siig/internal/log"
 	"github.com/yv3000/siig/rules"
 	"github.com/yv3000/siig/scanner"
 )
@@ -362,7 +363,7 @@ func resolveStack(stackID string, opts Options) (*rules.StackRule, error) {
 	if opts.UseCache {
 		rule, err := cache.Get(stackID)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "cache error for %s: %v\n", stackID, err)
+			log.Warn("cached rule unreadable", "stack", stackID, "err", err)
 		} else if rule != nil {
 			return rule, nil
 		}
@@ -382,7 +383,7 @@ func resolveStack(stackID string, opts Options) (*rules.StackRule, error) {
 
 	if opts.UseCache {
 		if cacheErr := cache.Set(stackID, rule); cacheErr != nil {
-			fmt.Fprintf(os.Stderr, "cache write error for %s: %v\n", stackID, cacheErr)
+			log.Warn("rule cache write failed", "stack", stackID, "err", cacheErr)
 		}
 	}
 

@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/yv3000/siig/internal/log"
 	"github.com/yv3000/siig/internal/version"
 	"github.com/yv3000/siig/rules"
 )
@@ -79,6 +80,7 @@ func scanFS(fsys fs.FS, stackRules []rules.StackRule) (*ScanResult, error) {
 		if err != nil {
 			// Keep going, but remember what we could not read.
 			scanErrs = append(scanErrs, fmt.Sprintf("%s: %v", path, err))
+			log.Warn("path could not be read", "path", path, "err", err)
 			return nil
 		}
 

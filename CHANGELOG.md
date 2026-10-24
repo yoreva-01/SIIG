@@ -4,6 +4,7 @@
 
 ### Added
 
+- Diagnostics are structured records: `internal/log` wraps `log/slog` and writes WARN/ERROR to stderr, as JSON when `--verbose` is set. An unreadable path and a failed rule-cache read or write now carry the path/stack id that caused them. stdout output is unchanged.
 - 12 more embedded stacks, synced from siig-rules: Gleam, Nim, OCaml, Crystal, Fortran, D, PureScript, Lean 4, Coq, LaTeX, PlatformIO and Solidity. The embedded DB is now 122 rules.
 
 ### Fixed

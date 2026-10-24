@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/yv3000/siig/cache"
+	"github.com/yv3000/siig/internal/log"
 	"github.com/yv3000/siig/internal/version"
 	"github.com/yv3000/siig/matcher"
 	"github.com/yv3000/siig/output"
@@ -60,6 +61,10 @@ func Execute() {
 // matching rules into per-target entries, writes the applicable files and then
 // reports what happened.
 func runSiig(cmd *cobra.Command, args []string) error {
+	// --verbose asks for more detail, so diagnostics go out as records a
+	// machine can read; stdout keeps the human summary either way.
+	log.SetJSON(verbose)
+
 	if clearCache {
 		if err := cache.Clear(); err != nil {
 			return fmt.Errorf("could not clear cached rules: %w", err)

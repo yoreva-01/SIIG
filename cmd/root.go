@@ -29,7 +29,7 @@ var (
 // rootCmd is the base command — just run "siig" and it does the thing
 var rootCmd = &cobra.Command{
 	Use:   "siig",
-	Short: "She Is Ignoring — auto-populate ignore files based on detected stack",
+	Short: "Auto-populate ignore files based on the detected stack",
 	Long: `SIIG scans your project directory, detects the tech stack,
 and automatically populates .gitignore, .vercelignore, .dockerignore,
 and .vscode/settings.json with the correct entries.

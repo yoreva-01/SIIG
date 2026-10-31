@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black" alt="Linux" />
 </p>
 
-<h1 align="center">SIIG — She Is Ignoring</h1>
+<h1 align="center">SIIG</h1>
 <p align="center"><b>Zero-config CLI that auto-populates ignore files based on your project's tech stack.</b></p>
 <p align="center">One command. No prompts. No config. Under 200ms. 122 stacks supported out of the box — and any stack beyond that is fetched automatically on demand.</p>
 

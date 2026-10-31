@@ -1,18 +1,22 @@
 # Changelog
 
-## Unreleased
+## 2.0.2 — 2026-10-31
 
 ### Added
 
-- Diagnostics are structured records: `internal/log` wraps `log/slog` and writes WARN/ERROR to stderr, as JSON when `--verbose` is set. An unreadable path and a failed rule-cache read or write now carry the path/stack id that caused them. stdout output is unchanged.
 - 12 more embedded stacks, synced from siig-rules: Gleam, Nim, OCaml, Crystal, Fortran, D, PureScript, Lean 4, Coq, LaTeX, PlatformIO and Solidity. The embedded DB is now 122 rules.
+- Diagnostics are structured records: `internal/log` wraps `log/slog` and writes WARN/ERROR to stderr, as JSON when `--verbose` is set. An unreadable path and a failed rule-cache read or write now carry the path/stack id that caused them. stdout output is unchanged.
 
 ### Fixed
 
-- The rules sync never picked up a new stack: `git diff` reports nothing for untracked files, which is exactly what an added rule is, so the job declared "already up to date" and opened no pull request.
-- A manual re-run of the sync on the same day failed to push, because the dated branch already existed from the earlier run. Each run now gets its own branch.
+- `--targets docker` on a project with no Docker no longer reports "Everything already up to date"; it lists the target as not applicable and still exits 0. Thanks to @dannyward630 (#51).
 - Stacks whose rule was fetched from siig-rules now appear in the detected list as `<Name> (online)`, and in `--verbose` with their source. The online result was computed but never shown, so the documented `Detected: Node.js, Gleam (online)` output could not happen.
 - `--offline` applies rules already present in the local cache, as the README states; it used to skip the cache entirely and fall back to embedded rules only.
+- The rules sync never picked up a new stack: `git diff` reports nothing for untracked files, which is exactly what an added rule is, so the job declared "already up to date" and opened no pull request. A manual re-run on the same day also failed to push, because the dated branch already existed; each run now gets its own branch.
+
+### Changed
+
+- The project is SIIG. The backronym is retired from the title and the CLI summary.
 
 ## 2.0.1 — 2026-10-23
 

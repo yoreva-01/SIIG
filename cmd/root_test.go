@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/yv3000/siig/cache"
@@ -135,6 +137,60 @@ func TestRunSiig_checkFailsUntilIgnoreFilesAreCurrent(t *testing.T) {
 	if err := runSiig(rootCmd, nil); err != nil {
 		t.Fatalf("--check should pass once ignore files are current: %v", err)
 	}
+}
+
+func TestRunSiig_nonApplicableTargetIsNotReportedUpToDate(t *testing.T) {
+	for _, checkMode := range []bool{false, true} {
+		name := "run"
+		if checkMode {
+			name = "check"
+		}
+		t.Run(name, func(t *testing.T) {
+			chdir(t, t.TempDir())
+			isolateHome(t)
+			resetFlags(t)
+			offline = true
+			targets = "docker"
+			check = checkMode
+
+			var err error
+			out := captureStdout(t, func() {
+				err = runSiig(rootCmd, nil)
+			})
+			if err != nil {
+				t.Fatalf("non-applicable target should not be an error: %v", err)
+			}
+			if strings.Contains(out, "Everything already up to date") {
+				t.Fatalf("non-applicable target must not be reported as current:\n%s", out)
+			}
+			if !strings.Contains(out, ".dockerignore") || !strings.Contains(out, "not applicable for this project") {
+				t.Fatalf("output should explain that Docker is not applicable:\n%s", out)
+			}
+		})
+	}
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+
+	original := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+	fn()
+	if err := w.Close(); err != nil {
+		os.Stdout = original
+		t.Fatal(err)
+	}
+	os.Stdout = original
+
+	data, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
 }
 
 func chdir(t *testing.T, dir string) {
